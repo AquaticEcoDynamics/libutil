@@ -1,0 +1,8 @@
+#
+# v1.0.2
+#
+# Fixed a memory leak and incorrect handling of empty entries in namelists
+#
+# Version 0.9.2
+#
+# Extracted from glm main sources to support gehm

@@ -1,0 +1,3 @@
+*.o
+libutil.a
+*__genmod.*
