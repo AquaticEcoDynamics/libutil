@@ -32,7 +32,7 @@
 
 #include "libutil.h"
 
-#ifdef _FORTRAN_VERSION_
+#ifdef _FORTRAN_SOURCE_
 
   INTERFACE
 

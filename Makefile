@@ -26,8 +26,16 @@
 
 
 srcdir=src
-objdir=objs
 incdir=include
+ifeq ($(SINGLE),true)
+  objdir=obj_s
+  moddir=mod_s
+  TARGET=lib/libutil_s.a
+else
+  objdir=obj
+  moddir=mod
+  TARGET=lib/libutil.a
+endif
 
 SRCS=${srcdir}/namelist.c \
      ${srcdir}/aed_csv.c \
@@ -42,17 +50,17 @@ OBJS=${objdir}/namelist.o \
 CFLAGS=-Wall -O3 -fPIC
 INCLUDES=-I${incdir}
 ifeq ($(F90),ifort)
-  FFLAGS=-warn all -i-static -mp1 -stand f03 -fPIC
+  FFLAGS=-warn all -i-static -module ${moddir} -mp1 -stand f03 -fPIC
 else
   ifeq ($(F90),)
     F90=gfortran
   endif
-  FFLAGS=-fPIC -Wall -ffree-line-length-none -std=f2003 -fall-intrinsics
+  FFLAGS=-fPIC -Wall -J ${moddir} -ffree-line-length-none -std=f2003 -fall-intrinsics
 endif
 
-all: libutil.a
+all: ${TARGET}
 
-libutil.a: ${objdir} ${OBJS}
+${TARGET}: ${objdir} ${OBJS} lib
 	ar rv $@ ${OBJS}
 	ranlib $@
 
@@ -63,17 +71,20 @@ clean: ${objdir}
 	@/bin/rmdir ${objdir}
 
 distclean: clean
-	@touch libutil.a
-	@/bin/rm libutil.a
+	@touch lib mod mod_s
+	@/bin/rm -rf lib mod mod_s
+
+lib:
+	@mkdir lib
+
+${moddir}:
+	@mkdir ${moddir}
 
 ${objdir}:
-	mkdir ${objdir}
+	@mkdir ${objdir}
 
 ${objdir}/%.o: ${srcdir}/%.c ${incdir}/%.h ${incdir}/libutil.h
 	$(CC) $(CFLAGS) $(INCLUDES) -g -c $< -o $@
 
-${objdir}/%.o: ${srcdir}/%.F90 ${incdir}/%.h ${incdir}/libutil.h
-	$(F90) $(FFLAGS) -D_FORTRAN_VERSION_ -c $< -o $@
-
-${objdir}/%.o: ${srcdir}/%.F90
-	$(F90) $(FFLAGS) -D_FORTRAN_VERSION_ -c $< -o $@
+${objdir}/%.o: ${srcdir}/%.F90 ${incdir}/%.h ${incdir}/libutil.h ${moddir}
+	$(F90) $(FFLAGS) -D_FORTRAN_SOURCE_ -c $< -o $@

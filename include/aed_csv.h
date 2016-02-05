@@ -34,7 +34,7 @@
 
 #define bufsize 2048
 
-#ifdef _FORTRAN_VERSION_
+#ifdef _FORTRAN_SOURCE_
 
   INTERFACE
 
