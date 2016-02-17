@@ -73,7 +73,7 @@ static AED_CSV_IN csv_if[MAX_IN_FILES];
 
 static AED_REAL missing = MISVAL;
 
-#define BUFCHUNK	10240
+#define BUFCHUNK    10240
 
 
 /*============================================================================*/
@@ -95,12 +95,12 @@ static char *read_line(FILE *inf)
     if ( feof(inf) || fgets(ln, size, inf) == NULL) return NULL;
 
     while ( !feof(inf) && strlen(ln) && ln[strlen(ln)-1] != '\n' ) {
-	_ln = (ln = (char *)realloc(ln, size+BUFCHUNK));
-	if (fgets(&ln[size-1], BUFCHUNK+1, inf) == NULL) {
+        _ln = (ln = (char *)realloc(ln, size+BUFCHUNK));
+        if (fgets(&ln[size-1], BUFCHUNK+1, inf) == NULL) {
             ln[size-1] = 0;
             return ln;
         }
-	size += BUFCHUNK;
+        size += BUFCHUNK;
     }
 
     // strip off any LF or CR characters
@@ -108,8 +108,8 @@ static char *read_line(FILE *inf)
         ln[strlen(ln)-1] = 0;
 
     if ( !strlen(ln) && feof(inf) ) {
-	free(ln);
-	ln = NULL;
+        free(ln);
+        ln = NULL;
     }
 
     return ln;
