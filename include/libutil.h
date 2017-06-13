@@ -28,7 +28,7 @@
 #ifndef _LIBUTIL_H_
 #define _LIBUTIL_H_
 
-#define LIB_UTIL_VERSION  "1.0.2"
+#define LIB_UTIL_VERSION  "1.0.3"
 
 #ifndef AED_REAL
    #if SINGLE
@@ -56,7 +56,7 @@
    double fmod(double x, double y);
    //float fmodf(float x, float y);
    double round(double x);
-#  ifndef _VISUAL_C_
+#  if !(defined(_MSC_VER) && !defined(__INTEL_COMPILER))
       char *strndup(const char *s, size_t n);
 #  endif
 #else
