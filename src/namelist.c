@@ -219,8 +219,8 @@ static char *grab_substring(const char *s, int n)
 static int extract_values(NML_Entry *entry, char *r)
 {
     char *s, *d, term;
-    int n, type;
-    int comma = FALSE;
+    size_t n;
+    int comma = FALSE, type;
     int ires = 0, bd = FALSE;
     double rres = 0.;
 

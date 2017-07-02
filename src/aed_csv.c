@@ -123,7 +123,8 @@ static char **break_line(const char *b, int *n)
     char **ret = NULL;
     char *t = NULL, *s;
     char term;
-    int  n_strs = 0, len;
+    int  n_strs = 0;
+    size_t len;
 
     while (b && *b ) {
         term = 0;
@@ -357,7 +358,8 @@ int get_csv_val_s(int csv, int idx, char *s)
 int open_csv_output(const char *out_dir, const char *fname)
 {
     char *path = NULL;
-    int len, ret = -1;
+    size_t len;
+    int ret = -1;
 
     if ( out_dir != NULL && strcmp(out_dir, ".") != 0 ) {
         len = strlen(out_dir) + strlen(DIRSEP) + strlen(fname) + 5;

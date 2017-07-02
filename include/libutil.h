@@ -28,7 +28,7 @@
 #ifndef _LIBUTIL_H_
 #define _LIBUTIL_H_
 
-#define LIB_UTIL_VERSION  "1.0.3"
+#define LIB_UTIL_VERSION  "1.0.4"
 
 #ifndef AED_REAL
    #if SINGLE
@@ -50,7 +50,7 @@
 #ifdef _WIN32
 #  define DIRSEP "\\"
 #  define snprintf _snprintf
-#  define strcasecmp stricmp
+#  define strcasecmp _stricmp
 #  define strncasecmp _strnicmp
    /* for some reason neither VisualC nor Intel C define these prototypes */
    double fmod(double x, double y);
