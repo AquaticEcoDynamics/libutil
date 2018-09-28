@@ -210,7 +210,7 @@ int close_csv_input(int csvf)
         return -1;
     }
 
-    fclose(csv_if[csvf].f);
+    if ( csv_if[csvf].f != NULL ) fclose(csv_if[csvf].f);
     csv_if[csvf].f = NULL;
     if ( csvf == _n_inf-1 ) _n_inf--;
 
