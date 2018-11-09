@@ -206,7 +206,7 @@ int open_csv_input(const char *fname, const char *timefmt)
 int close_csv_input(int csvf)
 {
     if ( csvf < 0 || csvf > _n_inf ) {
-        fprintf(stderr, "Request for invalid csv file number\n");
+        fprintf(stderr, "Request close for invalid csv file number\n");
         return -1;
     }
 
@@ -274,8 +274,12 @@ int load_csv_line(int csv)
     int    jul, secs;
 
     if ( csv < 0 || csv > _n_inf ) {
-        fprintf(stderr, "Request for invalid csv file number\n");
+        fprintf(stderr, "Request load for invalid csv file number\n");
+#if DEBUG
+        CRASH("load_csv_line");
+#else
         exit(1);
+#endif
     }
 
     b = break_line(read_line(csv_if[csv].f), &count);
