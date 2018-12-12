@@ -51,6 +51,8 @@ CFLAGS=-Wall -O3 -fPIC
 INCLUDES=-I${incdir}
 ifeq ($(F90),ifort)
   FFLAGS=-warn all -i-static -module ${moddir} -mp1 -stand f03 -fPIC
+else ifeq ($(F90),pgfortran)
+  FFLAGS=-fPIC -module ${moddir} -O3
 else
   ifeq ($(F90),)
     F90=gfortran
