@@ -7,7 +7,7 @@
  *     School of Agriculture and Environment                                  *
  *     The University of Western Australia                                    *
  *                                                                            *
- * Copyright 2013 - 2018 -  The University of Western Australia               *
+ * Copyright 2013 - 2019 -  The University of Western Australia               *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -31,6 +31,12 @@
 #include "libutil.h"
 
 #define MAX_OUT_VALUES   40
+
+typedef char VARNAME[40];
+typedef char FILNAME[80];
+
+#define MAX_OUT_FILES 100
+#define MAX_IN_FILES  100
 
 #define bufsize 2048
 
