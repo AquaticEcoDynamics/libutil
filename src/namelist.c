@@ -9,7 +9,7 @@
  *     School of Agriculture and Environment                                  *
  *     The University of Western Australia                                    *
  *                                                                            *
- * Copyright 2013 - 2019 -  The University of Western Australia               *
+ * Copyright 2013 - 2020 -  The University of Western Australia               *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -46,7 +46,7 @@
 typedef union _nml_value {
     char  *s;
     double r;
-    int    i;
+    long long int    i;
     int    b;
 } NML_Value;
 
@@ -169,7 +169,7 @@ static char *trim_buf_name(char *buf)
 /******************************************************************************
  *                                                                            *
  ******************************************************************************/
-static int decode_buf(const char *s, double *r, int *i, int *b)
+static int decode_buf(const char *s, double *r, long long int *i, int *b)
 {
     if ( strncasecmp(s, ".true.", 6) == 0 ) {
         *b = TRUE;
@@ -183,7 +183,7 @@ static int decode_buf(const char *s, double *r, int *i, int *b)
     if ( sscanf(s, "%lf", r) == 0 ) *r = 0.0/zero;
 
     if ( strpbrk(s, ".Ee") == NULL ) {
-        if ( sscanf(s, "%d", i) == 1 ) {
+        if ( sscanf(s, "%lld", i) == 1 ) {
             return TYPE_INT;
         }
     }
@@ -221,7 +221,8 @@ static int extract_values(NML_Entry *entry, char *r)
     char *s, *d, term;
     size_t n;
     int comma = FALSE, type;
-    int ires = 0, bd = FALSE;
+    long long int ires = 0;
+    int bd = FALSE;
     double rres = 0.;
 
     do  {
