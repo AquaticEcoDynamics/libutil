@@ -50,14 +50,15 @@ OBJS=${objdir}/namelist.o \
 CFLAGS=-Wall -O3 -fPIC
 INCLUDES=-I${incdir}
 ifeq ($(F90),ifort)
-  FFLAGS=-warn all -i-static -module ${moddir} -mp1 -stand f03 -fPIC
+  FFLAGS=-warn all -module ${moddir} -static-intel -mp1 -stand f03 -fPIC
 else ifeq ($(F90),pgfortran)
   FFLAGS=-fPIC -module ${moddir} -O3
 else
+  FFLAGS=-fPIC -Wall -J ${moddir} -std=f2003
   ifeq ($(F90),)
     F90=gfortran
+    FFLAGS+=-ffree-line-length-none -fall-intrinsics
   endif
-  FFLAGS=-fPIC -Wall -J ${moddir} -ffree-line-length-none -std=f2003 -fall-intrinsics
 endif
 
 all: ${TARGET}
