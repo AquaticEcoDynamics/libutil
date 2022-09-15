@@ -482,7 +482,7 @@ void write_csv_var(int f, const char *name, AED_REAL val, const char *cval, int 
         }
     }
 
-    if (last) {
+    if (last && (strcasecmp(csv_of[f].time, "INVALID") != 0)) {
         fputs(csv_of[f].time, csv_of[f].f);
 
         for (i = 1; i < csv_of[f].n_cols; i++)
