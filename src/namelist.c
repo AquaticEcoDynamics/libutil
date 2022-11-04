@@ -9,7 +9,7 @@
  *     School of Agriculture and Environment                                  *
  *     The University of Western Australia                                    *
  *                                                                            *
- * Copyright 2013 - 2020 -  The University of Western Australia               *
+ * Copyright 2013 - 2022 -  The University of Western Australia               *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -85,6 +85,31 @@ static void show_entry(NML_Entry *ne);
 #endif
 static int lineno = 0;
 
+/*----------------------------------------------------------------------------*/
+static void**nml_seen_lst = NULL;
+static int nml_seen_cnt = 0;
+/*----------------------------------------------------------------------------*/
+static void nml_cleanup()
+{
+    int i;
+
+    for (i = 0; i < nml_seen_cnt; i++) free((void*)(nml_seen_lst[i]));
+}
+
+/*----------------------------------------------------------------------------*/
+static void add_nml_seen(void *argv)
+{
+    int c = nml_seen_cnt;
+
+    if (nml_seen_lst == NULL) {
+        if ( atexit(nml_cleanup) != 0 ) {
+        }
+    }
+
+    c++; nml_seen_lst = realloc(nml_seen_lst, sizeof(char*)*c);
+    nml_seen_lst[c-1] = argv;
+    nml_seen_cnt = c;
+}
 
 /******************************************************************************
  *                                                                            *
@@ -293,8 +318,7 @@ static int extract_values(NML_Entry *entry, char *r)
             while ( *r && ( *r == ' ' || *r == '\t' ) ) r++; // skip blanks
             comma = TRUE;
         }
-    }
-    while (*r);
+    } while (*r);
 
     return comma;
 }
@@ -512,11 +536,13 @@ int get_namelist(int file, NAMELIST *nl)
 
         if (ne != NULL) {
             ret = 0;
-            ne->seen = (void*)1;
 
             if ( (nl->type & MASK_LIST) ) {
                 count = ne->count;
-                switch (nl->type & MASK_TYPE) {
+                if (ne->seen) // we've already mad a copy, so just use that
+                    *((void**)(nl->data)) = ne->seen;
+                else {
+                    switch (nl->type & MASK_TYPE) {
                     case TYPE_INT :
                         *((void**)(nl->data)) = copy_int_list(count, ne->data);
                         break;
@@ -532,8 +558,10 @@ int get_namelist(int file, NAMELIST *nl)
                     default :
                         fprintf(stderr, "    Value of unknown type %d\n", ne->type);
                         break;
+                    }
+                    ne->seen = *((void**)(nl->data));
+                    add_nml_seen(ne->seen);
                 }
-                ne->seen = *((void**)(nl->data));
             } else {
                 switch (nl->type & MASK_TYPE) {
                     case TYPE_INT :
@@ -556,6 +584,7 @@ int get_namelist(int file, NAMELIST *nl)
                         fprintf(stderr, "    Value of unknown type %d\n", ne->type);
                         break;
                 }
+                ne->seen = (void*)1;
             }
         }
         nl++;
@@ -617,6 +646,17 @@ static void show_namelist(int file)
 /******************************************************************************
  *                                                                            *
  ******************************************************************************/
+void detach_nml_value(int file, const char *section, const char *entry)
+{
+    NML_Entry *ne = find_namelist_entry(file, section, entry);
+    if ( ne != NULL) ne->seen = NULL; // set it to unseen
+}
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+
+/******************************************************************************
+ *                                                                            *
+ ******************************************************************************/
 void close_namelist(int file)
 {
     NML *fl = &file_list[file];
@@ -646,8 +686,19 @@ void close_namelist(int file)
                 fprintf(stderr, "Section \"%s\" has unknown entry \"%s\"\n",
                                                             ns->name, ne->name);
             }
-            if (ne->type & MASK_LIST && (ne->seen != NULL && ne->seen != (void*)1))
-                free(ne->seen);
+// At the moment GLM will use the copy of the data so we can't delete it.
+//  Need to find a better way of delaling with that because memory checkers
+//  see this as a memory leak...
+// The solution was to keep a list of these "seen" allocations and add an
+// atexit function to clean them up.
+//          if ( ne->seen != NULL && ne->seen != (void*)1 ) {
+//              free(ne->seen);
+//              fprintf(stderr, " seen ");
+//          } else {
+//              if (ne->type & MASK_LIST) fprintf(stderr, " LST ");
+//              if (ne->seen != NULL ) fprintf(stderr, " SEEN ");
+//              if (ne->seen != (void*)1 ) fprintf(stderr, " !DAT ");
+//          }
 // fprintf(stderr, "Freed\n");
             free(ne->name);
         }

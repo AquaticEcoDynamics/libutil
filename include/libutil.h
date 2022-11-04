@@ -28,7 +28,7 @@
 #ifndef _LIBUTIL_H_
 #define _LIBUTIL_H_
 
-#define LIB_UTIL_VERSION  "1.0.9"
+#define LIB_UTIL_VERSION  "1.0.10"
 
 #ifndef AED_REAL
    #if SINGLE
