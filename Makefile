@@ -60,6 +60,9 @@ else
     FFLAGS+=-ffree-line-length-none -fall-intrinsics
   endif
 endif
+ifeq ($(DEBUG),true)
+  CFLAGS+=-g -fsanitize=address
+endif
 
 all: ${TARGET}
 

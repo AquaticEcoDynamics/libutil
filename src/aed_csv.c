@@ -352,6 +352,20 @@ int get_csv_val_s(int csv, int idx, char *s)
  *                                                                            *
  *                                                                            *
  ******************************************************************************/
+const char *get_csv_colname(int csv, int idx)
+{
+    if ( csv >= _n_inf ) return NULL;
+    if ( idx >= csv_if[csv].n_cols || idx < 0 ) return NULL;
+
+    return (const char*)(csv_if[csv].header[idx]);
+}
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+
+/******************************************************************************
+ *                                                                            *
+ *                                                                            *
+ ******************************************************************************/
 int open_csv_output(const char *out_dir, const char *fname)
 {
     char *path = NULL;

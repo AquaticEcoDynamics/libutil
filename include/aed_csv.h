@@ -102,6 +102,7 @@ typedef char FILNAME[80];
   int get_csv_val_i(int csv, int idx);
   AED_REAL get_csv_val_r(int csv, int idx);
   int get_csv_val_s(int csv, int idx, char *s);
+  const char *get_csv_colname(int csv, int idx);
 
   int close_csv_input(int csvf);
 

@@ -683,7 +683,7 @@ void close_namelist(int file)
             }
             if ( ns->seen && ne->seen == NULL ) {
                 err = 1;
-                fprintf(stderr, "Section \"%s\" has unknown entry \"%s\"\n",
+                fprintf(stderr, "Section \"%s\" has unseen entry \"%s\"\n",
                                                             ns->name, ne->name);
             }
 // At the moment GLM will use the copy of the data so we can't delete it.
