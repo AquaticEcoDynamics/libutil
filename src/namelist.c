@@ -60,8 +60,8 @@ typedef struct _nml_entry {
 
 typedef struct _nml_sect {
     char *name;
-    int   seen;
     int   count;
+    int   seen;
     NML_Entry *entry;
 } NML_Section;
 
@@ -93,7 +93,18 @@ static void nml_cleanup()
 {
     int i;
 
-    for (i = 0; i < nml_seen_cnt; i++) free((void*)(nml_seen_lst[i]));
+    if (nml_seen_lst == NULL) return;
+
+//fprintf(stderr, "Cleaning up nml_seen with %d entries\n", nml_seen_cnt);
+    for (i = 0; i < nml_seen_cnt-1; i++) {
+//fprintf(stderr, "Freeing nml_seen_lst[%d] = ", i);
+        if ( nml_seen_lst[i] != NULL && nml_seen_lst[i] != ((void*)1) ) {
+//            unsigned char *s = nml_seen_lst[i];
+//fprintf(stderr, "%p [%02X%02X%02X%02X]\n", nml_seen_lst[i], s[0],s[1],s[2],s[3]);
+            free((void*)(nml_seen_lst[i]));
+        }
+//else fputc('\n', stderr);
+    }
 }
 
 /*----------------------------------------------------------------------------*/
@@ -106,7 +117,8 @@ static void add_nml_seen(void *argv)
         }
     }
 
-    c++; nml_seen_lst = realloc(nml_seen_lst, sizeof(char*)*c);
+    c++;
+    nml_seen_lst = realloc(nml_seen_lst, sizeof(char*)*c);
     nml_seen_lst[c-1] = argv;
     nml_seen_cnt = c;
 }
@@ -539,7 +551,7 @@ int get_namelist(int file, NAMELIST *nl)
 
             if ( (nl->type & MASK_LIST) ) {
                 count = ne->count;
-                if (ne->seen) // we've already mad a copy, so just use that
+                if (ne->seen) // we've already and made a copy, so just use that
                     *((void**)(nl->data)) = ne->seen;
                 else {
                     switch (nl->type & MASK_TYPE) {

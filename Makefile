@@ -36,6 +36,9 @@ else
   moddir=mod
   TARGET=lib/libutil.a
 endif
+ifeq ($(MDEBUG),true)
+  DEBUG=true
+endif
 
 SRCS=${srcdir}/namelist.c \
      ${srcdir}/aed_csv.c \
@@ -61,7 +64,10 @@ else
   endif
 endif
 ifeq ($(DEBUG),true)
-  CFLAGS+=-g -fsanitize=address
+  CFLAGS+=-g
+endif
+ifeq ($(MDEBUG),true)
+  CFLAGS+=-fsanitize=address
 endif
 
 all: ${TARGET}
