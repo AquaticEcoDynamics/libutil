@@ -391,6 +391,62 @@ static int get_section(FILE *f, NML_Section *section, const char *name)
 /******************************************************************************
  *                                                                            *
  ******************************************************************************/
+static int npush = 0;
+static FILE *fs[10];
+static const char *fn[10];
+
+int push_file(FILE *f, const char *fname)
+{
+    if ( npush > 9 ) return -1;
+    fs[npush] = f;
+    fn[npush] = fname;
+    npush++;
+    return 0;
+}
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+
+int pop_file(FILE **f, const char **fname)
+{
+    if ( npush <= 0 ) return -1;
+    npush--;
+    if (npush) free((void*)*fname);
+    *f = fs[npush];
+    *fname = fn[npush];
+    return 0;
+}
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+
+int get_new_name(const char *buf, const char **fname)
+{
+    char *s = (char*)buf;
+    size_t l = strlen(s);
+    char *tname = malloc((l+1)*sizeof(char));
+    int i;
+    while ( *s != '"' && *s != '\'' && *s != 0 ) s++;
+    if (*s == 0 ) {
+        fprintf(stderr, "Include file declaration must start with a \" or \'\n");
+        free(tname); *fname = NULL;
+        return -1;
+    }
+    i = 0;
+    while ( *s != '"' && *s != '\'' && *s != 0 ) tname[i++] = *s++;
+    if ( *s == 0 ) {
+        fprintf(stderr, "Include file declaration must end with a \" or \'\n");
+        free(tname); *fname = NULL;
+        return -1;
+    }
+    tname[i] = 0;
+    *fname = tname;
+    return 0;
+}
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+
+/******************************************************************************
+ *                                                                            *
+ ******************************************************************************/
 int open_namelist(const char *fname)
 {
     int nml = -1;
@@ -409,19 +465,30 @@ int open_namelist(const char *fname)
     fl->fname = strdup(fname);
 
     lineno = 0;
-    while ( readline(f, buf) ) {
-        if (buf[0] != '&') {
-            fprintf(stderr, "Error in file \"%s\"\n", fname);
-            fprintf(stderr, "\"%s\"\n",buf);
-            list_count--;
-            file_list = realloc(file_list, sizeof(NML)*list_count);
-            nml = -1;
-            break;
+    do  {
+        while ( readline(f, buf) ) {
+            if (strncasecmp(buf, "include ", 8) == 0 ) {
+                push_file(f, fname);
+                get_new_name(buf, &fname);
+                f = fopen(fname, "r");
+                if ( f == NULL ) {
+                    fprintf(stderr, "Could not open include file \"%s\"\n", fname);
+                    return -1;
+                }
+                continue;
+            } else if (buf[0] != '&') {
+                fprintf(stderr, "Error in %sfile \"%s\"\n", (npush)?"included ":"", fname);
+                fprintf(stderr, "\"%s\"\n",buf);
+                list_count--;
+                file_list = realloc(file_list, sizeof(NML)*list_count);
+                nml = -1;
+                break;
+            }
+            fl->count++;
+            fl->section = realloc(fl->section, sizeof(NML_Section)*fl->count);
+            get_section(f, &fl->section[fl->count-1], &buf[1]);
         }
-        fl->count++;
-        fl->section = realloc(fl->section, sizeof(NML_Section)*fl->count);
-        get_section(f, &fl->section[fl->count-1], &buf[1]);
-    }
+    } while ( pop_file(&f, &fname) );
 
     fclose(f);
 #if DEBUG_NML
