@@ -430,6 +430,7 @@ int get_new_name(const char *buf, const char **fname)
         free(tname); *fname = NULL;
         return -1;
     }
+    s++;
     i = 0;
     while ( *s != '"' && *s != '\'' && *s != 0 ) tname[i++] = *s++;
     if ( *s == 0 ) {
@@ -488,7 +489,7 @@ int open_namelist(const char *fname)
             fl->section = realloc(fl->section, sizeof(NML_Section)*fl->count);
             get_section(f, &fl->section[fl->count-1], &buf[1]);
         }
-    } while ( pop_file(&f, &fname) );
+    } while ( ! pop_file(&f, &fname) );
 
     fclose(f);
 #if DEBUG_NML
