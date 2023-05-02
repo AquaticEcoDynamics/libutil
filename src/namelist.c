@@ -9,7 +9,7 @@
  *     School of Agriculture and Environment                                  *
  *     The University of Western Australia                                    *
  *                                                                            *
- * Copyright 2013 - 2022 -  The University of Western Australia               *
+ * Copyright 2013 - 2023 -  The University of Western Australia               *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -208,6 +208,11 @@ static char *trim_buf_name(char *buf)
  ******************************************************************************/
 static int decode_buf(const char *s, double *r, long long int *i, int *b)
 {
+    if ( strlen(s) <= 0 ) {
+        *b = FALSE;
+        return TYPE_NODATA;
+    }
+
     if ( strncasecmp(s, ".true.", 6) == 0 ) {
         *b = TRUE;
         return TYPE_BOOL;

@@ -9,7 +9,7 @@
  *     School of Agriculture and Environment                                  *
  *     The University of Western Australia                                    *
  *                                                                            *
- * Copyright 2013 - 2020 -  The University of Western Australia               *
+ * Copyright 2013 - 2023 -  The University of Western Australia               *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -32,6 +32,8 @@
 
 #define TYPE_START  0
 #define TYPE_END    0
+
+#define TYPE_NODATA 0
 #define TYPE_INT    1
 #define TYPE_DOUBLE 2
 #define TYPE_STR    3

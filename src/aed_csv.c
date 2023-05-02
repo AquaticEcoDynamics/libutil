@@ -7,7 +7,7 @@
  *     School of Agriculture and Environment                                  *
  *     The University of Western Australia                                    *
  *                                                                            *
- * Copyright 2013 - 2019 -  The University of Western Australia               *
+ * Copyright 2013 - 2023 -  The University of Western Australia               *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -64,7 +64,9 @@ static int _n_inf = 0;
 static AED_CSV_IN csv_if[MAX_IN_FILES];
 
 
-static AED_REAL missing = MISVAL;
+static const AED_REAL missing = MISVAL;
+static const AED_REAL zero = 0.;
+static const AED_REAL NaN = missing / zero;
 
 #define BUFCHUNK    10240
 
@@ -289,7 +291,10 @@ int load_csv_line(int csv)
         free(b[0]);
 
         for (i = 1; i < count; i++) {
-            sscanf(b[i], "%lf", &csv_if[csv].curLine[i]);
+            if (strlen(b[i]) > 0)
+                sscanf(b[i], "%lf", &csv_if[csv].curLine[i]);
+            else
+                csv_if[csv].curLine[i] = NaN;
             free(b[i]);
         }
     }
