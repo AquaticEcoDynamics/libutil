@@ -40,14 +40,8 @@ ifeq ($(MDEBUG),true)
   DEBUG=true
 endif
 
-SRCS=${srcdir}/namelist.c \
-     ${srcdir}/aed_csv.c \
-     ${srcdir}/aed_futils.F90 \
-     ${srcdir}/aed_time.c
-
 OBJS=${objdir}/namelist.o \
      ${objdir}/aed_csv.o \
-     ${objdir}/aed_futils.o \
      ${objdir}/aed_time.o
 
 CFLAGS=-Wall -O3 -fPIC
