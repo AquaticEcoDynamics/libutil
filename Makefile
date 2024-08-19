@@ -44,14 +44,14 @@ OBJS=${objdir}/namelist.o \
      ${objdir}/aed_csv.o \
      ${objdir}/aed_time.o
 
-CFLAGS=-Wall -O3 -fPIC
+CFLAGS=-Wall -O3
 INCLUDES=-I${incdir}
 ifeq ($(F90),ifort)
-  FFLAGS=-warn all -module ${moddir} -static-intel -mp1 -stand f03 -fPIC
+  FFLAGS=-warn all -module ${moddir} -static-intel -mp1 -stand f03
 else ifeq ($(F90),pgfortran)
-  FFLAGS=-fPIC -module ${moddir} -O3
+  FFLAGS=-module ${moddir} -O3
 else
-  FFLAGS=-fPIC -Wall -J ${moddir} -std=f2003
+  FFLAGS=-Wall -J ${moddir} -std=f2003
   ifeq ($(F90),)
     F90=gfortran
     FFLAGS+=-ffree-line-length-none -fall-intrinsics
@@ -63,6 +63,9 @@ endif
 ifeq ($(MDEBUG),true)
   CFLAGS+=-fsanitize=address
 endif
+
+CFLAGS+=-fPIE
+FFLAGS+=-fPIE
 
 all: ${TARGET}
 
