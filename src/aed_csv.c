@@ -60,7 +60,7 @@ typedef struct _AED_CSV_IN {
     timefmt  *tf;
 } AED_CSV_IN;
 
-static int _n_inf = 0;
+static int _n_inf = -1;
 static AED_CSV_IN csv_if[MAX_IN_FILES];
 
 
@@ -167,7 +167,18 @@ static int check_it(int csv, int idx)
 int open_csv_input(const char *fname, const char *timefmt)
 {
     FILE *f = NULL;
-    int cols;
+    int cols, i;
+
+    if ( _n_inf < 0 ) {
+        for (i = 0; i < MAX_IN_FILES; i++) {
+            csv_if[i].f = NULL;
+            csv_if[i].n_cols = 0;
+            csv_if[i].header = NULL;
+            csv_if[i].curLine = NULL;
+            csv_if[i].tf = NULL;
+        }
+        _n_inf = 0;
+    }
 
     if ( _n_inf >= MAX_IN_FILES ) {
         fprintf(stderr, "Too many csv_files open\n");
@@ -200,6 +211,8 @@ int open_csv_input(const char *fname, const char *timefmt)
  ******************************************************************************/
 int close_csv_input(int csvf)
 {
+    int i;
+
     if ( csvf < 0 || csvf > _n_inf ) {
         fprintf(stderr, "Request close for invalid csv file number\n");
         return -1;
@@ -207,6 +220,17 @@ int close_csv_input(int csvf)
 
     if ( csv_if[csvf].f != NULL ) fclose(csv_if[csvf].f);
     csv_if[csvf].f = NULL;
+    if ( csv_if[csvf].header != NULL ) {
+        for (i = 0; i < csv_if[csvf].n_cols; i++ )
+            free(csv_if[csvf].header[i]);
+        free(csv_if[csvf].header);
+    }
+    csv_if[csvf].n_cols = 0;
+    csv_if[csvf].header = NULL;
+    if ( csv_if[csvf].curLine != NULL ) free(csv_if[csvf].curLine);
+    csv_if[csvf].curLine = NULL;
+    csv_if[csvf].tf = NULL;
+
     if ( csvf == _n_inf-1 ) _n_inf--;
 
     return 0;
