@@ -7,7 +7,7 @@
 #      School of Agriculture and Environment                                  #
 #      The University of Western Australia                                    #
 #                                                                             #
-#  Copyright 2013 - 2024 -  The University of Western Australia               #
+#  Copyright 2013 - 2025 -  The University of Western Australia               #
 #                                                                             #
 #   libutil is free software: you can redistribute it and/or modify           #
 #   it under the terms of the GNU General Public License as published by      #
@@ -47,6 +47,8 @@ OBJS=${objdir}/namelist.o \
 CFLAGS=-Wall -O3
 INCLUDES=-I${incdir}
 ifeq ($(F90),ifort)
+  FFLAGS=-warn all -module ${moddir} -static-intel -mp1 -stand f03
+else ifeq ($(F90),ifx)
   FFLAGS=-warn all -module ${moddir} -static-intel -mp1 -stand f03
 else ifeq ($(F90),pgfortran)
   FFLAGS=-module ${moddir} -O3
