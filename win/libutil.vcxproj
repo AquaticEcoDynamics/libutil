@@ -43,7 +43,7 @@
   <!-- Latest Target Version property -->
   <PropertyGroup Condition="'$(WindowsTargetPlatformVersion)'==''">
     <LatestTargetPlatformVersion>$([Microsoft.Build.Utilities.ToolLocationHelper]::GetLatestSDKTargetPlatformVersion('Windows', '10.0'))</LatestTargetPlatformVersion>
-    <WindowsTargetPlatformVersion Condition="'$(WindowsTargetPlatformVersion)' == ''">$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion Condition="'$(WindowsTargetPlatformVersion)' == ''">10.0</WindowsTargetPlatformVersion>
     <TargetPlatformVersion>$(WindowsTargetPlatformVersion)</TargetPlatformVersion>
   </PropertyGroup>
   <!-- Latest Target Version property -->
@@ -63,6 +63,18 @@
   <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <InterproceduralOptimization>true</InterproceduralOptimization>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="PropertySheets">
