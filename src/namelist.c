@@ -538,7 +538,7 @@ static NML_Entry *find_namelist_entry(int file, const char *section, const char 
 static void *copy_int_list(int count, NML_Value *e)
 {
     int i;
-    int *l = malloc(sizeof(int)*count);
+    int *l = malloc(sizeof(int)*(count+2));
     void *ret = l;
     for (i = 0; i < count; i++) { *l = e->i; l++; e++; }
     return ret;
@@ -552,7 +552,7 @@ static void *copy_int_list(int count, NML_Value *e)
 static void *copy_double_list(int count, NML_Value *e, int isdbl)
 {
     int i;
-    double *l = malloc(sizeof(double)*count);
+    double *l = malloc(sizeof(double)*(count+2));
     void *ret = l;
     for (i = 0; i < count; i++) {
         if ( isdbl ) *l = e->r;
@@ -570,7 +570,7 @@ static void *copy_double_list(int count, NML_Value *e, int isdbl)
 static void *copy_str_list(int count, NML_Value *e)
 {
     int i;
-    char **l = malloc(sizeof(char*)*count);
+    char **l = malloc(sizeof(char*)*(count+2));
     void *ret = l;
     for (i = 0; i < count; i++) { *l = (e->s); l++; e++; }
     return ret;
@@ -584,7 +584,7 @@ static void *copy_str_list(int count, NML_Value *e)
 static void *copy_bool_list(int count, NML_Value *e)
 {
     int i;
-    int *l = malloc(sizeof(int)*count);
+    int *l = malloc(sizeof(int)*(count+2));
     void *ret = l;
     for (i = 0; i < count; i++) { *l = e->b; l++; e++; }
     return ret;
