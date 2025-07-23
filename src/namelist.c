@@ -9,7 +9,7 @@
  *     School of Agriculture and Environment                                  *
  *     The University of Western Australia                                    *
  *                                                                            *
- * Copyright 2013 - 2024 -  The University of Western Australia               *
+ * Copyright 2013 - 2025 - The University of Western Australia                *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -54,14 +54,12 @@ typedef struct _nml_entry {
     char      *name;
     int        type;
     int        count;
-    void      *seen;
     NML_Value *data;
 } NML_Entry;
 
 typedef struct _nml_sect {
     char *name;
     int   count;
-    int   seen;
     NML_Entry *entry;
 } NML_Section;
 
@@ -84,44 +82,6 @@ static void show_namelist(int file);
 static void show_entry(NML_Entry *ne);
 #endif
 static int lineno = 0;
-
-/*----------------------------------------------------------------------------*/
-static void**nml_seen_lst = NULL;
-static int nml_seen_cnt = 0;
-/*----------------------------------------------------------------------------*/
-static void nml_cleanup()
-{
-    int i;
-
-    if (nml_seen_lst == NULL) return;
-
-//fprintf(stderr, "Cleaning up nml_seen with %d entries\n", nml_seen_cnt);
-    for (i = 0; i < nml_seen_cnt-1; i++) {
-//fprintf(stderr, "Freeing nml_seen_lst[%d] = ", i);
-        if ( nml_seen_lst[i] != NULL && nml_seen_lst[i] != ((void*)1) ) {
-//            unsigned char *s = nml_seen_lst[i];
-//fprintf(stderr, "%p [%02X%02X%02X%02X]\n", nml_seen_lst[i], s[0],s[1],s[2],s[3]);
-            free((void*)(nml_seen_lst[i]));
-        }
-//else fputc('\n', stderr);
-    }
-}
-
-/*----------------------------------------------------------------------------*/
-static void add_nml_seen(void *argv)
-{
-    int c = nml_seen_cnt;
-
-    if (nml_seen_lst == NULL) {
-        if ( atexit(nml_cleanup) != 0 ) {
-        }
-    }
-
-    c++;
-    nml_seen_lst = realloc(nml_seen_lst, sizeof(char*)*c);
-    nml_seen_lst[c-1] = argv;
-    nml_seen_cnt = c;
-}
 
 /******************************************************************************
  *                                                                            *
@@ -351,7 +311,6 @@ static int get_entry(FILE *f, NML_Entry *entry, char *name)
 
     entry->name = strdup(name);
     entry->type = 0;
-    entry->seen = 0;
     entry->count = 0;
     entry->data = NULL;
 
@@ -377,7 +336,6 @@ static int get_section(FILE *f, NML_Section *section, const char *name)
     section->name = strdup(name);
     section->entry = NULL;
     section->count = 0;
-    section->seen = 0;
 
     readline(f, buf);
     if ( strcmp(buf, "/") == 0 ) return 1;
@@ -519,8 +477,6 @@ static NML_Entry *find_namelist_entry(int file, const char *section, const char 
         NML_Section *ns = &fl->section[i];
         if ( strcasecmp(section, ns->name) != 0 ) continue;
 
-        ns->seen = 1;
-
         for (j = 0; j < ns->count; j++) {
              NML_Entry *ne = &ns->entry[j];
 
@@ -528,66 +484,6 @@ static NML_Entry *find_namelist_entry(int file, const char *section, const char 
         }
     }
     return NULL;
-}
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-
-
-/******************************************************************************
- *                                                                            *
- ******************************************************************************/
-static void *copy_int_list(int count, NML_Value *e)
-{
-    int i;
-    int *l = malloc(sizeof(int)*(count+2));
-    void *ret = l;
-    for (i = 0; i < count; i++) { *l = e->i; l++; e++; }
-    return ret;
-}
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-
-
-/******************************************************************************
- *                                                                            *
- ******************************************************************************/
-static void *copy_double_list(int count, NML_Value *e, int isdbl)
-{
-    int i;
-    double *l = malloc(sizeof(double)*(count+2));
-    void *ret = l;
-    for (i = 0; i < count; i++) {
-        if ( isdbl ) *l = e->r;
-        else         *l = e->i;
-        l++; e++;
-    }
-    return ret;
-}
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-
-
-/******************************************************************************
- *                                                                            *
- ******************************************************************************/
-static void *copy_str_list(int count, NML_Value *e)
-{
-    int i;
-    char **l = malloc(sizeof(char*)*(count+2));
-    void *ret = l;
-    for (i = 0; i < count; i++) { *l = (e->s); l++; e++; }
-    return ret;
-}
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-
-
-/******************************************************************************
- *                                                                            *
- ******************************************************************************/
-static void *copy_bool_list(int count, NML_Value *e)
-{
-    int i;
-    int *l = malloc(sizeof(int)*(count+2));
-    void *ret = l;
-    for (i = 0; i < count; i++) { *l = e->b; l++; e++; }
-    return ret;
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
@@ -610,7 +506,7 @@ int get_nml_listlen(int file, const char *section, const char *entry)
 int get_namelist(int file, NAMELIST *nl)
 {
     const char *section;
-    int count, ret = -1;
+    int i, ret = -1;
 
     if (nl->type != TYPE_START) return -1;
     section = nl->name;
@@ -622,31 +518,17 @@ int get_namelist(int file, NAMELIST *nl)
         if (ne != NULL) {
             ret = 0;
 
+            if ( (nl->type & MASK_TYPE) == TYPE_DOUBLE &&
+                 (ne->type & MASK_TYPE) == TYPE_INT ) {
+                NML_Value *tr = malloc((ne->count+2)*sizeof(NML_Value));
+                for (i = 0; i < ne->count; i++) tr[i].r = ne->data[i].i;
+                free(ne->data);
+                ne->data = tr;
+                ne->type = TYPE_DOUBLE | (ne->type & MASK_LIST);
+            }
+
             if ( (nl->type & MASK_LIST) ) {
-                count = ne->count;
-                if (ne->seen) // we've already and made a copy, so just use that
-                    *((void**)(nl->data)) = ne->seen;
-                else {
-                    switch (nl->type & MASK_TYPE) {
-                    case TYPE_INT :
-                        *((void**)(nl->data)) = copy_int_list(count, ne->data);
-                        break;
-                    case TYPE_DOUBLE :
-                        *((void**)(nl->data)) = copy_double_list(count, ne->data, (ne->type & MASK_TYPE) == TYPE_DOUBLE);
-                        break;
-                    case TYPE_STR :
-                        *((void**)(nl->data)) = copy_str_list(count, ne->data);
-                        break;
-                    case TYPE_BOOL :
-                        *((void**)(nl->data)) = copy_bool_list(count, ne->data);
-                        break;
-                    default :
-                        fprintf(stderr, "    Value of unknown type %d\n", ne->type);
-                        break;
-                    }
-                    ne->seen = *((void**)(nl->data));
-                    add_nml_seen(ne->seen);
-                }
+                *((void**)(nl->data)) = (void*)(ne->data);
             } else {
                 switch (nl->type & MASK_TYPE) {
                     case TYPE_INT :
@@ -656,8 +538,6 @@ int get_namelist(int file, NAMELIST *nl)
                     case TYPE_DOUBLE :
                         if ( (ne->type & MASK_TYPE) == TYPE_DOUBLE )
                             *((double*)(nl->data)) = ne->data[0].r;
-                        else if ( (ne->type & MASK_TYPE) == TYPE_INT )
-                            *((double*)(nl->data)) = ne->data[0].i;
                         break;
                     case TYPE_STR :
                         *((char**)(nl->data)) = ne->data[0].s;
@@ -669,7 +549,6 @@ int get_namelist(int file, NAMELIST *nl)
                         fprintf(stderr, "    Value of unknown type %d\n", ne->type);
                         break;
                 }
-                ne->seen = (void*)1;
             }
         }
         nl++;
@@ -698,7 +577,7 @@ static void show_entry(NML_Entry *ne)
     fprintf(stderr, "  Entry %s has %d %s values\n", ne->name, ne->count, ts);
     for (k = 0; k < ne->count; k++) {
         switch (ne->type) {
-            case TYPE_INT    : fprintf(stderr, "   Value : %d\n", ne->data[k].i); break;
+            case TYPE_INT    : fprintf(stderr, "   Value : %ld\n", ne->data[k].i); break;
             case TYPE_DOUBLE : fprintf(stderr, "   Value : %12.4f\n", ne->data[k].r); break;
             case TYPE_STR    : fprintf(stderr, "   Value : \"%s\"\n", (ne->data[k].s)?ne->data[k].s:"NULL"); break;
             case TYPE_BOOL   : fprintf(stderr, "   Value : %s\n", (ne->data[k].b)?"TRUE":"FALSE"); break;
@@ -731,31 +610,17 @@ static void show_namelist(int file)
 /******************************************************************************
  *                                                                            *
  ******************************************************************************/
-void detach_nml_value(int file, const char *section, const char *entry)
-{
-    NML_Entry *ne = find_namelist_entry(file, section, entry);
-    if ( ne != NULL) ne->seen = NULL; // set it to unseen
-}
-/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
-
-
-/******************************************************************************
- *                                                                            *
- ******************************************************************************/
 void close_namelist(int file)
 {
     NML *fl = &file_list[file];
     int i, j, k, err = 0;
 
-//  fprintf(stderr, "Closing file \"%s\"\n", fl->fname);
     free(fl->fname);
     for (i = 0; i < fl->count; i++) {
         NML_Section *ns = &fl->section[i];
-// fprintf(stderr, "Freeing section \"%s\" with %d entries :\n", ns->name, ns->count);
 
         for (j = 0; j < ns->count; j++) {
             NML_Entry *ne = &ns->entry[j];
-// fprintf(stderr, "Freeing entry \"%s\" with %d subentries ... ", ne->name, ne->count);
             if ( ne->data != NULL ) {
                 if ( ne->type == TYPE_STR ) {
                     NML_Value *nv;
@@ -764,31 +629,13 @@ void close_namelist(int file)
                         if (nv->s != NULL) free(nv->s);
                     }
                 }
+//              fprintf(stderr, "free entry \"%s\"in section \"%s\" - %p\n",
+//                                                ne->name, ns->name, ne->data);
                 free(ne->data);
             }
-            if ( ns->seen && ne->seen == NULL ) {
-                err = 1;
-                fprintf(stderr, "Section \"%s\" has unseen entry \"%s\"\n",
-                                                            ns->name, ne->name);
-            }
-// At the moment GLM will use the copy of the data so we can't delete it.
-//  Need to find a better way of delaling with that because memory checkers
-//  see this as a memory leak...
-// The solution was to keep a list of these "seen" allocations and add an
-// atexit function to clean them up.
-//          if ( ne->seen != NULL && ne->seen != (void*)1 ) {
-//              free(ne->seen);
-//              fprintf(stderr, " seen ");
-//          } else {
-//              if (ne->type & MASK_LIST) fprintf(stderr, " LST ");
-//              if (ne->seen != NULL ) fprintf(stderr, " SEEN ");
-//              if (ne->seen != (void*)1 ) fprintf(stderr, " !DAT ");
-//          }
-// fprintf(stderr, "Freed\n");
             free(ne->name);
         }
         free(ns->entry);
-// fprintf(stderr, "Freed section\n");
         free(ns->name);
     }
     free(fl->section);

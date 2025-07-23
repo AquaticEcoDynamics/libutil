@@ -1,3 +1,4 @@
 *.o
 libutil.a
 *__genmod.*
+.*.swp

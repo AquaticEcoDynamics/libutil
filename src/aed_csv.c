@@ -7,7 +7,7 @@
  *     School of Agriculture and Environment                                  *
  *     The University of Western Australia                                    *
  *                                                                            *
- * Copyright 2013 - 2024 -  The University of Western Australia               *
+ * Copyright 2013 - 2025 - The University of Western Australia                *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -65,7 +65,7 @@ static AED_CSV_IN csv_if[MAX_IN_FILES];
 
 
 static const AED_REAL missing = MISVAL;
-static const AED_REAL zero = 0.;
+//static const AED_REAL zero = 0.;
 // VS C compiler doesnt like the first for, but is OK with t'other
 //static const AED_REAL NaN = missing / zero;
 static const AED_REAL NaN = MISVAL / 0.;
