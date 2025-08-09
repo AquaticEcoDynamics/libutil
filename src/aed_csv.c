@@ -231,6 +231,10 @@ int close_csv_input(int csvf)
     csv_if[csvf].header = NULL;
     if ( csv_if[csvf].curLine != NULL ) free(csv_if[csvf].curLine);
     csv_if[csvf].curLine = NULL;
+    if ( csv_if[csvf].tf != NULL) {
+        free(csv_if[csvf].tf->fmt);
+        free(csv_if[csvf].tf);
+    }
     csv_if[csvf].tf = NULL;
 
     if ( csvf == _n_inf-1 ) _n_inf--;

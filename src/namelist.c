@@ -543,7 +543,7 @@ int get_namelist(int file, NAMELIST *nl)
                         *((char**)(nl->data)) = ne->data[0].s;
                         break;
                     case TYPE_BOOL :
-                        *((int*)(nl->data)) = ne->data[0].b;
+                        *((_Bool*)(nl->data)) = ne->data[0].b;
                         break;
                     default :
                         fprintf(stderr, "    Value of unknown type %d\n", ne->type);
