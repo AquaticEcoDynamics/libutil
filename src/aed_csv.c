@@ -66,7 +66,7 @@ static AED_CSV_IN csv_if[MAX_IN_FILES];
 
 static const AED_REAL missing = MISVAL;
 //static const AED_REAL zero = 0.;
-// VS C compiler doesnt like the first for, but is OK with t'other
+// VS C compiler doesnt like the first form, but is OK with t'other
 //static const AED_REAL NaN = missing / zero;
 static const AED_REAL NaN = MISVAL / 0.;
 
