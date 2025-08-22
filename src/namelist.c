@@ -518,6 +518,8 @@ int get_namelist(int file, NAMELIST *nl)
         if (ne != NULL) {
             ret = 0;
 
+            // this is a fudge for the case where we've asked for reals but the config
+            // has forgotten to put in a '.' so we've seen it as ints.
             if ( (nl->type & MASK_TYPE) == TYPE_DOUBLE &&
                  (ne->type & MASK_TYPE) == TYPE_INT ) {
                 NML_Value *tr = malloc((ne->count+2)*sizeof(NML_Value));
@@ -528,7 +530,13 @@ int get_namelist(int file, NAMELIST *nl)
             }
 
             if ( (nl->type & MASK_LIST) ) {
-                *((void**)(nl->data)) = (void*)(ne->data);
+                if ((nl->type & MASK_TYPE) == TYPE_INT) {
+                    *((void**)(nl->data)) = malloc((ne->count+2)*sizeof(int));
+                    for (i = 0; i < ne->count; i++) (*((int**)(nl->data)))[i] = ne->data[i].i;
+                    free(ne->data); ne->data = *((void**)(nl->data));
+                } else {
+                    *((void**)(nl->data)) = (void*)(ne->data);
+                }
             } else {
                 switch (nl->type & MASK_TYPE) {
                     case TYPE_INT :
