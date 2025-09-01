@@ -530,13 +530,30 @@ int get_namelist(int file, NAMELIST *nl)
             }
 
             if ( (nl->type & MASK_LIST) ) {
-                if ((nl->type & MASK_TYPE) == TYPE_INT) {
-                    *((void**)(nl->data)) = malloc((ne->count+2)*sizeof(int));
-                    for (i = 0; i < ne->count; i++) (*((int**)(nl->data)))[i] = ne->data[i].i;
-                    free(ne->data); ne->data = *((void**)(nl->data));
-                } else {
-                    *((void**)(nl->data)) = (void*)(ne->data);
+                int count = ne->count, nofree=FALSE;
+                switch (nl->type & MASK_TYPE) {
+                    case TYPE_INT :
+                        *((void**)(nl->data)) = malloc((count+2)*sizeof(int));
+                        for (i = 0; i < count; i++) (*((int**)(nl->data)))[i] = ne->data[i].i;
+                        break;
+                    case TYPE_DOUBLE :
+                        *((void**)(nl->data)) = malloc((count+2)*sizeof(double));
+                        for (i = 0; i < count; i++) (*((double**)(nl->data)))[i] = ne->data[i].r;
+                        break;
+                    case TYPE_STR :
+                        *((void**)(nl->data)) = malloc((count+2)*sizeof(char**));
+                        for (i = 0; i < count; i++) (*((char***)(nl->data)))[i] = ne->data[i].s;
+                        break;
+                    case TYPE_BOOL :
+                        *((void**)(nl->data)) = malloc((count+2)*sizeof(int));
+                        for (i = 0; i < count; i++) (*((int**)(nl->data)))[i] = ne->data[i].b;
+                        break;
+                    default :
+                        fprintf(stderr, "    Value of unknown type %d\n", ne->type);
+                        nofree=TRUE;
+                        break;
                 }
+                if (!nofree) { free(ne->data); ne->data = *((void**)(nl->data)); }
             } else {
                 switch (nl->type & MASK_TYPE) {
                     case TYPE_INT :
@@ -637,8 +654,6 @@ void close_namelist(int file)
                         if (nv->s != NULL) free(nv->s);
                     }
                 }
-//              fprintf(stderr, "free entry \"%s\"in section \"%s\" - %p\n",
-//                                                ne->name, ns->name, ne->data);
                 free(ne->data);
             }
             free(ne->name);
