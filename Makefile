@@ -7,7 +7,7 @@
 #      School of Agriculture and Environment                                  #
 #      The University of Western Australia                                    #
 #                                                                             #
-#  Copyright 2013 - 2025 -  The University of Western Australia               #
+#  Copyright 2013-2025 - The University of Western Australia                  #
 #                                                                             #
 #   libutil is free software: you can redistribute it and/or modify           #
 #   it under the terms of the GNU General Public License as published by      #
@@ -98,4 +98,4 @@ ${objdir}/%.o: ${srcdir}/%.c ${incdir}/%.h ${incdir}/libutil.h
 	$(CC) $(CFLAGS) $(INCLUDES) -g -c $< -o $@
 
 ${objdir}/%.o: ${srcdir}/%.F90 ${incdir}/%.h ${incdir}/libutil.h ${moddir}
-	$(F90) $(FFLAGS) -D_FORTRAN_SOURCE_ -c $< -o $@
+	$(F90) $(FFLAGS) -c $< -o $@

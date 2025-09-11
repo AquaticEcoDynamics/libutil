@@ -32,7 +32,31 @@
 
 #include "libutil.h"
 
-#ifdef _FORTRAN_SOURCE_
+#ifdef __STDC__
+
+  /******************************************************************************/
+  typedef struct timefmt {
+      int Ypos, Ydig;
+      int Mpos, Mdig;
+      int Dpos, Ddig;
+      int hpos, hdig;
+      int mpos, mdig;
+      int spos, sdig;
+      char *fmt;
+  } timefmt;
+
+  void calendar_date(int julian, int *yyyy, int *mm, int *dd);
+  int julian_day(int y, int m, int d);
+  void read_time_string(const char *timestr, int *jul, int *secs);
+  void write_time_string(char *timestr, int jul, int secs);
+  int time_diff(int jul1, int secs1, int jul2, int secs2);
+  int day_of_year(int jday);
+
+  timefmt *decode_time_format(const char *fmt);
+  void read_time_formatted(const char *timestr, timefmt *tf, int *jul, int *secs);
+  void write_time_formatted(char *timestr, timefmt *tf, int jul, int secs);
+
+#else
 
   INTERFACE
 
@@ -72,30 +96,6 @@
  END INTERFACE
 
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-#else
-
-  /******************************************************************************/
-  typedef struct timefmt {
-      int Ypos, Ydig;
-      int Mpos, Mdig;
-      int Dpos, Ddig;
-      int hpos, hdig;
-      int mpos, mdig;
-      int spos, sdig;
-      char *fmt;
-  } timefmt;
-
-  void calendar_date(int julian, int *yyyy, int *mm, int *dd);
-  int julian_day(int y, int m, int d);
-  void read_time_string(const char *timestr, int *jul, int *secs);
-  void write_time_string(char *timestr, int jul, int secs);
-  int time_diff(int jul1, int secs1, int jul2, int secs2);
-  int day_of_year(int jday);
-
-  timefmt *decode_time_format(const char *fmt);
-  void read_time_formatted(const char *timestr, timefmt *tf, int *jul, int *secs);
-  void write_time_formatted(char *timestr, timefmt *tf, int jul, int secs);
-
 #endif
 
 #endif

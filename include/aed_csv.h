@@ -40,7 +40,42 @@ typedef char FILNAME[80];
 
 #define bufsize 2048
 
-#ifdef _FORTRAN_SOURCE_
+#ifdef __STDC__
+
+/*############################################################################*/
+
+  int open_csv_input_(const char *fname, int *len, const char *timefmt, int *l2);
+  int find_csv_var_(int *csv, const char *name, int *len);
+
+  int open_csv_input(const char *fname, const char *timefmt);
+  int count_lines(const char *fname);
+  int find_csv_var(int csv, const char *name);
+
+  int load_csv_line(int csv);
+  int get_csv_type(int csv, int idx);
+  int get_csv_val_i(int csv, int idx);
+  AED_REAL get_csv_val_r(int csv, int idx);
+  int get_csv_val_s(int csv, int idx, char *s);
+  const char *get_csv_colname(int csv, int idx);
+
+  int close_csv_input(int csvf);
+
+  int open_csv_output(const char *out_dir, const char *fname);
+  int close_csv_output(int outf);
+
+  void csv_header_start(int f);
+  void csv_header_var(int f, const char *v);
+  void csv_header_var2(int f, const char *v, const char *units);
+  void csv_header_end(int f);
+
+  void write_csv_start(int f, const char *cval);
+  void write_csv_val(int f, AED_REAL val);
+  void write_csv_end(int f);
+  void write_csv_var(int f, const char *name, AED_REAL val, const char *cval, int last);
+
+  void find_day(int csv, int time_idx, int jday);
+
+#else
 
   INTERFACE
 
@@ -85,41 +120,6 @@ typedef char FILNAME[80];
     !----------------------------------------------------
 
   END INTERFACE
-
-#else
-
-/*############################################################################*/
-
-  int open_csv_input_(const char *fname, int *len, const char *timefmt, int *l2);
-  int find_csv_var_(int *csv, const char *name, int *len);
-
-  int open_csv_input(const char *fname, const char *timefmt);
-  int count_lines(const char *fname);
-  int find_csv_var(int csv, const char *name);
-
-  int load_csv_line(int csv);
-  int get_csv_type(int csv, int idx);
-  int get_csv_val_i(int csv, int idx);
-  AED_REAL get_csv_val_r(int csv, int idx);
-  int get_csv_val_s(int csv, int idx, char *s);
-  const char *get_csv_colname(int csv, int idx);
-
-  int close_csv_input(int csvf);
-
-  int open_csv_output(const char *out_dir, const char *fname);
-  int close_csv_output(int outf);
-
-  void csv_header_start(int f);
-  void csv_header_var(int f, const char *v);
-  void csv_header_var2(int f, const char *v, const char *units);
-  void csv_header_end(int f);
-
-  void write_csv_start(int f, const char *cval);
-  void write_csv_val(int f, AED_REAL val);
-  void write_csv_end(int f);
-  void write_csv_var(int f, const char *name, AED_REAL val, const char *cval, int last);
-
-  void find_day(int csv, int time_idx, int jday);
 
 #endif
 
