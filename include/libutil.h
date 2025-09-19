@@ -7,7 +7,7 @@
  *     School of Agriculture and Environment                                  *
  *     The University of Western Australia                                    *
  *                                                                            *
- * Copyright 2013 - 2025 - The University of Western Australia                *
+ * Copyright 2013-2025 - The University of Western Australia                  *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -29,6 +29,8 @@
 #define _LIBUTIL_H_
 
 #define LIB_UTIL_VERSION  "1.0.15"
+
+#ifdef __STDC__
 
 #ifndef AED_REAL
    #if SINGLE
@@ -59,6 +61,25 @@
 
 #if DEBUG
 #define CRASH(s) ( { int *x = (int*)1; fputs(s, stderr); *x = 1; } )
+#endif
+
+#else
+
+  !-----------------------------------------------------------------------------
+  INTERFACE
+
+    SUBROUTINE read_time_string(timestr, jul, secs) BIND(C, name="read_time_string")
+     USE ISO_C_BINDING
+       CCHARACTER,INTENT(in) :: timestr(*)
+       CINTEGER,INTENT(out) :: jul
+       CINTEGER,INTENT(out) :: secs
+    END SUBROUTINE read_time_string
+
+    !-----------------------------------
+
+  END INTERFACE
+  !-----------------------------------------------------------------------------
+
 #endif
 
 #endif

@@ -103,14 +103,17 @@ typedef char FILNAME[80];
         USE ISO_C_BINDING
         CINTEGER,INTENT(in) :: csv, idx
      END FUNCTION get_csv_type
+
      CINTEGER FUNCTION get_csv_val_i(csv, idx)
         USE ISO_C_BINDING
         CINTEGER,INTENT(in) :: csv, idx
      END FUNCTION get_csv_val_i
+
      AED_REAL FUNCTION get_csv_val_r(csv, idx)
         USE ISO_C_BINDING
         CINTEGER,INTENT(in) :: csv, idx
      END FUNCTION get_csv_val_r
+
      CINTEGER FUNCTION get_csv_val_s(csv, idx, s)
         USE ISO_C_BINDING
         CINTEGER,INTENT(in) :: csv, idx

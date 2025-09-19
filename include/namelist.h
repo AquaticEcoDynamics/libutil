@@ -9,7 +9,7 @@
  *     School of Agriculture and Environment                                  *
  *     The University of Western Australia                                    *
  *                                                                            *
- * Copyright 2013 - 2025 - The University of Western Australia                *
+ * Copyright 2013-2025 - The University of Western Australia                  *
  *                                                                            *
  *  This file is part of GLM (General Lake Model)                             *
  *                                                                            *
@@ -29,6 +29,8 @@
  ******************************************************************************/
 #ifndef _NAMELIST_H_
 #define _NAMELIST_H_
+
+#if __STDC__
 
 #define TYPE_START  0
 #define TYPE_END    0
@@ -55,5 +57,7 @@ int open_namelist(const char *fname);
 int get_namelist(int file, NAMELIST *nl);
 int get_nml_listlen(int file, const char *section, const char *entry);
 void close_namelist(int file);
+
+#endif
 
 #endif
