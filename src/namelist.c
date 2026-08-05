@@ -641,6 +641,77 @@ static void show_namelist(int file)
 
 
 /******************************************************************************
+ * Write out a NAMELIST table's current values in the same &section/entry=/  *
+ * syntax get_namelist() reads. Scalars print whatever is presently in the   *
+ * target variable; MASK_LIST (array) entries print a commented-out          *
+ * placeholder, since this table alone carries no reliable array length.     *
+ ******************************************************************************/
+void write_namelist(FILE *out, NAMELIST *nl, NML_Describe_Fn describe)
+{
+    char note[512];
+
+    if (nl == NULL || nl->type != TYPE_START || nl->name == NULL) return;
+
+    fprintf(out, "&%s\n", nl->name);
+    nl++;
+
+    while (nl->type != TYPE_END) {
+        const char *key = nl->name;
+        const char *desc = (describe != NULL) ? describe(key) : NULL;
+
+        if (nl->type & MASK_LIST) {
+            const char *sample;
+            switch (nl->type & MASK_TYPE) {
+                case TYPE_STR  : sample = "'a', 'b'";        break;
+                case TYPE_BOOL : sample = ".true., .false."; break;
+                default        : sample = "0, 0";            break;
+            }
+            if (desc != NULL)
+                snprintf(note, sizeof(note), "%s (comma-separated list; unset by default)", desc);
+            else
+                snprintf(note, sizeof(note), "list (comma-separated); unset by default");
+            fprintf(out, "!  %-22s = %-18s !# %s\n", key, sample, note);
+        } else {
+            switch (nl->type & MASK_TYPE) {
+                case TYPE_INT :
+                    if (desc != NULL) fprintf(out, "   %-22s = %-18d !# %s\n", key, *((int*)(nl->data)), desc);
+                    else               fprintf(out, "   %-22s = %d\n", key, *((int*)(nl->data)));
+                    break;
+                case TYPE_DOUBLE :
+                    if (desc != NULL) fprintf(out, "   %-22s = %-18.6g !# %s\n", key, *((double*)(nl->data)), desc);
+                    else               fprintf(out, "   %-22s = %.6g\n", key, *((double*)(nl->data)));
+                    break;
+                case TYPE_STR : {
+                    char *v = *((char**)(nl->data));
+                    if (v != NULL) {
+                        if (desc != NULL) fprintf(out, "   %-22s = '%s'   !# %s\n", key, v, desc);
+                        else               fprintf(out, "   %-22s = '%s'\n", key, v);
+                    } else {
+                        if (desc != NULL) snprintf(note, sizeof(note), "%s (unset by default)", desc);
+                        else               snprintf(note, sizeof(note), "unset by default");
+                        fprintf(out, "!  %-22s = %-18s !# %s\n", key, "''", note);
+                    }
+                    break;
+                }
+                case TYPE_BOOL : {
+                    const char *bv = (*((_Bool*)(nl->data))) ? ".true." : ".false.";
+                    if (desc != NULL) fprintf(out, "   %-22s = %-18s !# %s\n", key, bv, desc);
+                    else               fprintf(out, "   %-22s = %s\n", key, bv);
+                    break;
+                }
+                default :
+                    fprintf(out, "!  %-22s = ?                  !# unknown type, please check\n", key);
+                    break;
+            }
+        }
+        nl++;
+    }
+    fprintf(out, "/\n\n");
+}
+/*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
+
+
+/******************************************************************************
  *                                                                            *
  ******************************************************************************/
 void close_namelist(int file)
