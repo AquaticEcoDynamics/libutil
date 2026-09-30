@@ -54,6 +54,14 @@ typedef char FILNAME[80];
   int get_csv_type(int csv, int idx);
   int get_csv_val_i(int csv, int idx);
   AED_REAL get_csv_val_r(int csv, int idx);
+  /* P6a: cell status of the current row */
+# define CSV_OK      0
+# define CSV_BLANK   1
+# define CSV_BAD     2
+# define CSV_MISSING 3
+  int get_csv_status(int csv, int idx);
+  int get_csv_row(int csv);
+  const char *get_csv_fname(int csv);
   int get_csv_val_s(int csv, int idx, char *s);
   const char *get_csv_colname(int csv, int idx);
 

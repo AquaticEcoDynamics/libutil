@@ -30,6 +30,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>     /* D3: isfinite */
+#include <limits.h>   /* D3: INT_MIN, INT_MAX */
 
 #include "namelist.h"
 
@@ -55,12 +57,14 @@ typedef struct _nml_entry {
     int        type;
     int        count;
     NML_Value *data;
+    int        used;        /* D5: found by get_namelist / get_nml_listlen */
 } NML_Entry;
 
 typedef struct _nml_sect {
     char *name;
     int   count;
     NML_Entry *entry;
+    int   requested;        /* D5: asked for by get_namelist */
 } NML_Section;
 
 typedef struct _nml {
@@ -82,6 +86,33 @@ static void show_namelist(int file);
 static void show_entry(NML_Entry *ne);
 #endif
 static int lineno = 0;
+static const char *nml_cur_fname = "?";   /* D2: the file being parsed, for messages */
+static const char *nml_cur_section = "?"; /* D5: the section being parsed, for messages */
+
+/* D2 2026-09-15: a value of the wrong type is a configuration error, stated - never read as another type's
+ * bytes through the NML_Value union. */
+static const char *nml_type_name(int t)
+{
+    switch (t & MASK_TYPE) {
+        case TYPE_INT    : return "an integer";
+        case TYPE_DOUBLE : return "a real";
+        case TYPE_STR    : return "a string";
+        case TYPE_BOOL   : return "a logical";
+    }
+    return "no value";
+}
+static void nml_range_fatal(int file, const char *section, const char *key, long long v)
+{
+    fprintf(stderr, "FATAL: namelist \"%s\": &%s %s = %lld does not fit an integer\n",
+            file_list[file].fname, section, key, v);
+    exit(1);
+}
+static void nml_type_fatal(int file, const char *section, const char *key, int want, int got)
+{
+    fprintf(stderr, "FATAL: namelist \"%s\": &%s %s must be %s, but the file gives %s\n",
+            file_list[file].fname, section, key, nml_type_name(want), nml_type_name(got));
+    exit(1);
+}
 
 /******************************************************************************
  *                                                                            *
@@ -115,12 +146,20 @@ static char *readline(FILE *inf, char *buf)
 
         s = ln;
         while (*s) {
+            /* D4 2026-09-15: one escape rule, inside and outside a string, as extract_values and grab_quoted use:
+             * a backslash takes the next character literally (never past the end). This scan used to end a
+             * string at an escaped quote, and outside a string not to protect the next character. A doubled
+             * quote closes and reopens, which leaves the string balanced. */
             if (*s == '"' || *s == '\'' ) {
                 term = *s++;
-                while (*s && *s != term) s++;
-                if (*s != term) { fprintf(stderr, "Unterminated string\n"); exit(1); }
+                while (*s && *s != term) s += (*s == '\\' && s[1]) ? 2 : 1;
+                if (*s != term) {
+                    fprintf(stderr, "FATAL: namelist \"%s\" line %d: unterminated string\n",
+                            nml_cur_fname, lineno + 1);
+                    exit(1);
+                }
             }
-            if (*s == '\\') s++;
+            if (*s == '\\') s += s[1] ? 2 : 1;
             else if (*s == '!' || *s == '#') *s = 0;
             else s++;
         }
@@ -173,25 +212,45 @@ static int decode_buf(const char *s, double *r, long long int *i, int *b)
         return TYPE_NODATA;
     }
 
-    if ( strncasecmp(s, ".true.", 6) == 0 ) {
-        *b = TRUE;
-        return TYPE_BOOL;
-    }
-    if ( strncasecmp(s, ".false.", 7) == 0 ) {
-        *b = FALSE;
-        return TYPE_BOOL;
-    }
-
-    if ( sscanf(s, "%lf", r) == 0 ) *r = 0.0/zero;
-
-    if ( strpbrk(s, ".Ee") == NULL ) {
-        if ( sscanf(s, "%lld", i) == 1 ) {
-            return TYPE_INT;
+    /* D2 2026-09-15: a logical is one whole token, case-insensitive, trailing blanks ignored. The prefix test
+     * took ".trueXYZ" as true, and T, F, true, false, .t., .f. fell through to strings. */
+    {
+        static const char *t_tok[] = { ".true.", ".t.", "t", "true" };
+        static const char *f_tok[] = { ".false.", ".f.", "f", "false" };
+        size_t n = strlen(s);
+        int k;
+        while ( n > 0 && (s[n-1] == ' ' || s[n-1] == '\t') ) n--;
+        for (k = 0; k < 4; k++) {
+            if ( strlen(t_tok[k]) == n && strncasecmp(s, t_tok[k], n) == 0 ) { *b = TRUE;  return TYPE_BOOL; }
+            if ( strlen(f_tok[k]) == n && strncasecmp(s, f_tok[k], n) == 0 ) { *b = FALSE; return TYPE_BOOL; }
         }
     }
-    if ( sscanf(s, "%lf", r) == 1 )
-        return TYPE_DOUBLE;
 
+    /* D3 2026-09-15: a number is ONE whole token - nothing after it but blanks, finite, not hex - read with the
+     * same sscanf conversions as before, so every value that parsed before parses to the same bits. sscanf alone
+     * read the longest numeric prefix ("12abc" was 12, "1.5abc" 1.5), accepted nan and inf, and dropped a
+     * Fortran d exponent ("1.5d2" read 1.5); d/D is now read as e. Anything else is a string, and a numeric
+     * key given a string stops in get_namelist. */
+    {
+        char tmp[128];
+        size_t n = strlen(s), k;
+        int used;
+        while ( n > 0 && (s[n-1] == ' ' || s[n-1] == '\t') ) n--;
+        if ( n > 0 && n < sizeof(tmp) && strpbrk(s, "xX") == NULL ) {
+            for (k = 0; k < n; k++) tmp[k] = (s[k] == 'd' || s[k] == 'D') ? 'e' : s[k];
+            tmp[n] = '\0';
+            used = -1;
+            if ( strpbrk(tmp, ".Ee") == NULL && sscanf(tmp, "%lld%n", i, &used) == 1 && used == (int)n ) {
+                sscanf(tmp, "%lf", r);   /* as before: an integer fills the real too - extraction stores a
+                                            * list's later integers from *r once a real has promoted it */
+                return TYPE_INT;
+            }
+            used = -1;
+            if ( sscanf(tmp, "%lf%n", r, &used) == 1 && used == (int)n && isfinite(*r) )
+                return TYPE_DOUBLE;
+        }
+    }
+    *r = 0.0/zero;
     return TYPE_STR;
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -218,6 +277,21 @@ static char *grab_substring(const char *s, int n)
 /******************************************************************************
  *                                                                            *
  ******************************************************************************/
+/* D4 2026-09-15: a quoted value - a backslash takes the next character literally (as grab_substring does, but
+ * never past the end of the value) and a doubled quote is one literal quote. */
+static char *grab_quoted(const char *s, size_t n, char term)
+{
+    char *d = malloc(n+1), *e = d;
+    const char *end = s + n;
+    while ( s < end ) {
+        if ( *s == '\\' && s + 1 < end ) { s++; *e++ = *s++; continue; }
+        if ( *s == term && s + 1 < end && s[1] == term ) { *e++ = term; s += 2; continue; }
+        *e++ = *s++;
+    }
+    *e = 0;
+    return d;
+}
+
 static int extract_values(NML_Entry *entry, char *r)
 {
     char *s, *d, term;
@@ -230,20 +304,34 @@ static int extract_values(NML_Entry *entry, char *r)
     do  {
         s = r;
         if (*r == '"' || *r == '\'' ) { // a string
+            /* D4 2026-09-15: a trailing backslash no longer steps past the end of the line; a doubled quote is one
+             * literal quote (it used to end the value, and the rest was skipped); only blanks may follow the
+             * closing quote (text there used to be skipped silently). */
             term = *r++; s++;
-            while (*r && *r != term) {
-                if (*r == '\\' ) r++;
+            while (*r) {
+                if (*r == '\\' && r[1]) { r += 2; continue; }
+                if (*r == term && r[1] == term) { r += 2; continue; }
+                if (*r == term) break;
                 r++;
             }
-            if ( *r != term ) { fprintf(stderr, "unmatched '%c'\n", term); exit(1); }
+            if ( *r != term ) {
+                fprintf(stderr, "FATAL: namelist \"%s\" line %d: %s: unmatched %c\n",
+                        nml_cur_fname, lineno, entry->name, term);
+                exit(1);
+            }
 
             n = r++ - s;
 
-            d = grab_substring(s, n);
+            d = grab_quoted(s, n, term);
 
             type = TYPE_STR;
 
-            while (*r && *r != ',' ) r++;
+            while (*r == ' ' || *r == '\t') r++;
+            if (*r && *r != ',') {
+                fprintf(stderr, "FATAL: namelist \"%s\" line %d: %s: text after the closing quote: %s\n",
+                        nml_cur_fname, lineno, entry->name, r);
+                exit(1);
+            }
         } else {
             while (*r && *r != ',' ) r++;
 
@@ -267,7 +355,17 @@ static int extract_values(NML_Entry *entry, char *r)
                 entry->type = TYPE_DOUBLE;
             }
 
-            free(d);
+            /* D1 2026-09-15: a value that decoded as a STRING is stored below (entry->data[].s = d), so its
+             * buffer must live until close_namelist frees it. Freeing it here left a dangling pointer - the
+             * caller read freed memory and close_namelist freed it again. Numbers and logicals are copied by
+             * value, so their buffer is freed exactly as before. */
+            if ( type != TYPE_STR ) free(d);
+        }
+        /* D2: every element of a list has the list's type (integers and reals promote, above) */
+        if ( type != TYPE_NODATA && entry->type != 0 && (entry->type & MASK_TYPE) != type ) {
+            fprintf(stderr, "FATAL: namelist \"%s\" line %d: %s mixes %s and %s values\n",
+                    nml_cur_fname, lineno, entry->name, nml_type_name(entry->type), nml_type_name(type));
+            exit(1);
         }
         if ( entry->type == 0 ) entry->type = type;
         entry->data = realloc(entry->data, sizeof(NML_Value)*(entry->count+1));
@@ -313,12 +411,20 @@ static int get_entry(FILE *f, NML_Entry *entry, char *name)
     entry->type = 0;
     entry->count = 0;
     entry->data = NULL;
+    entry->used = 0;
 
     do  {
         if (r[0] != 0) extract_values(entry, r);
 
         if ( (r = readline(f, buf) ) ) {
             if ( strcmp(buf, "/") == 0 ) return 1;
+            /* D5 2026-09-15: a new section before this one's '/' used to be read as one more value of the
+             * previous key, and the keys after it as keys of this section - the next section vanished. */
+            if ( buf[0] == '&' ) {
+            fprintf(stderr, "FATAL: namelist \"%s\" line %d: &%s is not closed with / before \"%s\"\n",
+                    nml_cur_fname, lineno, nml_cur_section, buf);
+            exit(1);
+            }
         } else return -1;
     }
     while ( strchr(buf, '=') == NULL );
@@ -336,9 +442,16 @@ static int get_section(FILE *f, NML_Section *section, const char *name)
     section->name = strdup(name);
     section->entry = NULL;
     section->count = 0;
+    section->requested = 0;
+    nml_cur_section = section->name;   /* D5 */
 
     readline(f, buf);
     if ( strcmp(buf, "/") == 0 ) return 1;
+    if ( buf[0] == '&' ) {   /* D5: the section opened and never closed */
+            fprintf(stderr, "FATAL: namelist \"%s\" line %d: &%s is not closed with / before \"%s\"\n",
+                    nml_cur_fname, lineno, nml_cur_section, buf);
+            exit(1);
+    }
 
     do  {
         section->entry = realloc(section->entry, sizeof(NML_Entry)*(section->count+1));
@@ -427,6 +540,7 @@ int open_namelist(const char *fname)
     fl = &file_list[nml];
     fl->count = 0; fl->section = NULL;
     fl->fname = strdup(fname);
+    nml_cur_fname = fl->fname;   /* D2 */
 
     lineno = 0;
     do  {
@@ -480,7 +594,7 @@ static NML_Entry *find_namelist_entry(int file, const char *section, const char 
         for (j = 0; j < ns->count; j++) {
              NML_Entry *ne = &ns->entry[j];
 
-             if ( strcasecmp(entry, ne->name) == 0 ) return ne;
+             if ( strcasecmp(entry, ne->name) == 0 ) { ne->used = 1; return ne; }   /* D5 */
         }
     }
     return NULL;
@@ -511,6 +625,8 @@ int get_namelist(int file, NAMELIST *nl)
     if (nl->type != TYPE_START) return -1;
     section = nl->name;
     nl++;
+    for (i = 0; i < file_list[file].count; i++)   /* D5: a section asked for is judged by check_namelist_unused */
+        if ( strcasecmp(section, file_list[file].section[i].name) == 0 ) file_list[file].section[i].requested = 1;
 
     while (nl->type != TYPE_END) {
         NML_Entry *ne = find_namelist_entry(file, section, nl->name);
@@ -533,18 +649,30 @@ int get_namelist(int file, NAMELIST *nl)
                 int count = ne->count, nofree=FALSE;
                 switch (nl->type & MASK_TYPE) {
                     case TYPE_INT :
+                        if ( (ne->type & MASK_TYPE) != TYPE_INT )   /* D3: read a real's bits as an integer */
+                            nml_type_fatal(file, section, nl->name, TYPE_INT, ne->type);
+                        for (i = 0; i < count; i++)
+                            if ( ne->data[i].i < INT_MIN || ne->data[i].i > INT_MAX )
+                                nml_range_fatal(file, section, nl->name, ne->data[i].i);
                         *((void**)(nl->data)) = malloc((count+2)*sizeof(int));
                         for (i = 0; i < count; i++) (*((int**)(nl->data)))[i] = ne->data[i].i;
                         break;
                     case TYPE_DOUBLE :
+                        if ( (ne->type & MASK_TYPE) != TYPE_DOUBLE )   /* D3 (integers were widened above) */
+                            nml_type_fatal(file, section, nl->name, TYPE_DOUBLE, ne->type);
                         *((void**)(nl->data)) = malloc((count+2)*sizeof(double));
                         for (i = 0; i < count; i++) (*((double**)(nl->data)))[i] = ne->data[i].r;
                         break;
                     case TYPE_STR :
+                        if ( (ne->type & MASK_TYPE) != TYPE_STR )   /* D2 */
+                            nml_type_fatal(file, section, nl->name, TYPE_STR, ne->type);
                         *((void**)(nl->data)) = malloc((count+2)*sizeof(char**));
-                        for (i = 0; i < count; i++) (*((char***)(nl->data)))[i] = ne->data[i].s;
+                        for (i = 0; i < count; i++)
+                            (*((char***)(nl->data)))[i] = (ne->data[i].s != NULL) ? strdup(ne->data[i].s) : NULL;
                         break;
                     case TYPE_BOOL :
+                        if ( (ne->type & MASK_TYPE) != TYPE_BOOL )   /* D2 */
+                            nml_type_fatal(file, section, nl->name, TYPE_BOOL, ne->type);
                         *((void**)(nl->data)) = malloc((count+2)*sizeof(int));
                         for (i = 0; i < count; i++) (*((int**)(nl->data)))[i] = ne->data[i].b;
                         break;
@@ -553,30 +681,39 @@ int get_namelist(int file, NAMELIST *nl)
                         nofree=TRUE;
                         break;
                 }
-                if (!nofree) { free(ne->data); ne->data = *((void**)(nl->data)); }
             } else {
                 switch (nl->type & MASK_TYPE) {
-                    case TYPE_INT :
-                        if ( (ne->type & MASK_TYPE) == TYPE_INT )
-                            *((int*)(nl->data)) = ne->data[0].i;
-                        else if ( (ne->type & MASK_TYPE) == TYPE_BOOL )
-                            //# accept .true./.false. for integer option flags
+                    case TYPE_INT :   /* D3: a non-integer used to leave the default silently */
+                        if ( (ne->type & MASK_TYPE) == TYPE_BOOL ) {
+                            //# accept .true./.false. for integer option flags (upstream c8fe70e)
                             *((int*)(nl->data)) = ne->data[0].b ? 1 : 0;
+                        } else {
+                            if ( (ne->type & MASK_TYPE) != TYPE_INT )
+                                nml_type_fatal(file, section, nl->name, TYPE_INT, ne->type);
+                            if ( ne->data[0].i < INT_MIN || ne->data[0].i > INT_MAX )
+                                nml_range_fatal(file, section, nl->name, ne->data[0].i);
+                            *((int*)(nl->data)) = ne->data[0].i;
+                        }
                         break;
-                    case TYPE_DOUBLE :
-                        if ( (ne->type & MASK_TYPE) == TYPE_DOUBLE )
-                            *((double*)(nl->data)) = ne->data[0].r;
+                    case TYPE_DOUBLE :   /* D3: a non-number used to leave the default silently */
+                        if ( (ne->type & MASK_TYPE) != TYPE_DOUBLE )
+                            nml_type_fatal(file, section, nl->name, TYPE_DOUBLE, ne->type);
+                        *((double*)(nl->data)) = ne->data[0].r;
                         break;
                     case TYPE_STR :
+                        if ( (ne->type & MASK_TYPE) != TYPE_STR )   /* D2 */
+                            nml_type_fatal(file, section, nl->name, TYPE_STR, ne->type);
                         *((char**)(nl->data)) = ne->data[0].s;
                         break;
                     case TYPE_BOOL :
-                        if ( (ne->type & MASK_TYPE) == TYPE_INT )
-                            //# explicit coercion: numeric bools were previously
-                            //  read via union punning of the low bytes
+                        if ( (ne->type & MASK_TYPE) == TYPE_INT ) {
+                            //# explicit coercion (upstream c8fe70e): a number for a logical key
                             *((_Bool*)(nl->data)) = (ne->data[0].i != 0);
-                        else
+                        } else {
+                            if ( (ne->type & MASK_TYPE) != TYPE_BOOL )   /* D2 */
+                                nml_type_fatal(file, section, nl->name, TYPE_BOOL, ne->type);
                             *((_Bool*)(nl->data)) = ne->data[0].b;
+                        }
                         break;
                     default :
                         fprintf(stderr, "    Value of unknown type %d\n", ne->type);
@@ -643,6 +780,27 @@ static void show_namelist(int file)
 /******************************************************************************
  *                                                                            *
  ******************************************************************************/
+/* D5 2026-09-15: one WARNING per key of a section that get_namelist was asked for, but which nothing read - a
+ * misspelt key used to be stored and ignored without a word. Sections never asked for are not judged (another
+ * reader may own them). Returns the number of unread keys. */
+int check_namelist_unused(int file)
+{
+    NML *fl = &file_list[file];
+    int i, j, n = 0;
+
+    for (i = 0; i < fl->count; i++) {
+        NML_Section *ns = &fl->section[i];
+        if ( !ns->requested ) continue;
+        for (j = 0; j < ns->count; j++)
+            if ( !ns->entry[j].used ) {
+                fprintf(stderr, "WARNING: namelist \"%s\": &%s %s is not a key GLM reads - ignored\n",
+                        fl->fname, ns->name, ns->entry[j].name);
+                n++;
+            }
+    }
+    return n;
+}
+
 void close_namelist(int file)
 {
     NML *fl = &file_list[file];

@@ -57,6 +57,8 @@ int open_namelist(const char *fname);
 int get_namelist(int file, NAMELIST *nl);
 int get_nml_listlen(int file, const char *section, const char *entry);
 void close_namelist(int file);
+int check_namelist_unused(int file);   /* D5 2026-09-15: WARNING per unread key of a requested section */
+#define NML_HAVE_UNUSED_CHECK 1
 
 #endif
 
