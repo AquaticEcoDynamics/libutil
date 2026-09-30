@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+#include <math.h>   /* P6e: isfinite */
 #ifndef _WIN32
 #include <unistd.h>
 #endif
@@ -38,7 +39,7 @@
 #include "aed_csv.h"
 #include "aed_time.h"
 
-#define MAX_OUT_VALUES   40
+#define MAX_OUT_VALUES   80
 
 #define MAX_OUT_FILES 20000
 #define MAX_IN_FILES  20000
@@ -62,6 +63,9 @@ typedef struct _AED_CSV_IN {
     int    n_cols;
     char **header;
     AED_REAL *curLine;
+    char     *curStat;      /* P6a: status of each cell of curLine: CSV_OK, CSV_BLANK or CSV_BAD */
+    int       row;          /* P6a: line number of the row now in curLine (the header is line 1) */
+    char     *fname;        /* P6a: the file name, for messages */
     timefmt  *tf;
 } AED_CSV_IN;
 
@@ -179,12 +183,13 @@ static char *read_line(FILE *inf)
 
 
 /******************************************************************************/
-static char **break_line(const char *b, int *n)
+static char **break_line(const char *b, int *n, const char *fname, int row)
 {
     char **ret = NULL;
     char *t = NULL, *s;
     char term;
     int  n_strs = 0;
+    int  trailing = 0;   /* P6d */
     size_t len;
 
     while (b && *b ) {
@@ -192,23 +197,50 @@ static char **break_line(const char *b, int *n)
         if ( *b == '"' || *b == '\'' )
            term = *b++;
         t = (char*)b;
-        while ( *b ) {
-            if ( *b == '\\' ) b+=2;
-            else if ( term && *b != term ) b++;
-            else if ( *b != ',' ) b++;
-            else break;
+        if ( term ) {
+            /* D6a 2026-09-15: a quoted field ends at its matching quote, and the quotes are not part of the value.
+             * The old scan let it run past the closing quote to the next quote or the end of the line - so
+             * "time","flow" was ONE header name and every later column silently absent. After the closing
+             * quote only blanks may precede the separator. */
+            while ( *b && *b != term ) b += (*b == '\\' && b[1]) ? 2 : 1;
+            if ( *b != term ) {
+                fprintf(stderr, "FATAL: %s row %d: a field opened with %c is not closed\n",
+                                fname ? fname : "(csv)", row, term);
+                exit(1);
+            }
+            len = b - t;
+            b++;
+            while ( *b == ' ' || *b == '\t' ) b++;
+            if ( *b && *b != ',' ) {
+                fprintf(stderr, "FATAL: %s row %d: text after a closing quote: %s\n",
+                                fname ? fname : "(csv)", row, b);
+                exit(1);
+            }
+        } else {
+            while ( *b ) {
+                if ( *b == '\\' ) b += (b[1] ? 2 : 1);   /* P6a: never step past the terminating NUL */
+                else if ( *b != ',' ) b++;
+                else break;
+            }
+            while (*t && (*t == ' ' || *t == '\t')) t++;
+            len = b - t;
+            while (len && (t[len-1] == ' ' || t[len-1] == '\t')) len--;
         }
-        while (*t && (*t == ' ' || *t == '\t')) t++;
-        len = b - t;
-        if ( term && *b == term ) len--;
-        while (len && (t[len-1] == ' ' || t[len-1] == '\t')) len--;
         s = malloc(len+1);
         strncpy(s, t, len); s[len] = 0;
         n_strs++;
         ret = realloc(ret, (n_strs+1)*sizeof(char*));
         ret[n_strs-1] = s;
         ret[n_strs] = NULL;
-        if ( *b ) b++;
+        if ( *b ) { b++; trailing = (*b == 0); }   /* P6d: b stops only at a separator or the end */
+        else trailing = 0;
+    }
+    if ( trailing ) {   /* P6d: the empty field after a final separator ("a,b,") was not counted */
+        s = malloc(1); s[0] = 0;
+        n_strs++;
+        ret = realloc(ret, (n_strs+1)*sizeof(char*));
+        ret[n_strs-1] = s;
+        ret[n_strs] = NULL;
     }
 
     *n = n_strs;
@@ -334,15 +366,35 @@ int open_csv_input(const char *fname, const char *timefmt)
     }
 
     csv_if[_n_inf].f = f;
-    csv_if[_n_inf].header = break_line( read_line(f), &cols );
+    csv_if[_n_inf].header = break_line( read_line(f), &cols, fname, 1 );
+    if ( cols > 1 && csv_if[_n_inf].header[cols-1][0] == 0 ) {   /* P6d: as before, no column for a trailing comma */
+        free(csv_if[_n_inf].header[cols-1]);
+        csv_if[_n_inf].header[--cols] = NULL;
+    }
     csv_if[_n_inf].n_cols = cols;
     csv_if[_n_inf].curLine = malloc(sizeof(AED_REAL)*cols);
+    csv_if[_n_inf].curStat = calloc(cols > 0 ? cols : 1, 1);
+    csv_if[_n_inf].row = 1;
+    csv_if[_n_inf].fname = strdup(fname);
+    {   /* P6a: with a duplicate header name find_csv_var silently took the first of the two columns */
+        int j;
+        for (i = 1; i < cols; i++)
+            for (j = 0; j < i; j++)
+                if ( strcasecmp(csv_if[_n_inf].header[i], csv_if[_n_inf].header[j]) == 0 ) {
+                    fprintf(stderr, "FATAL: %s: column '%s' appears twice in the header (columns %d and %d)\n",
+                                    fname, csv_if[_n_inf].header[i], j+1, i+1);
+                    exit(1);
+                }
+    }
     if (timefmt != NULL)
         csv_if[_n_inf].tf = decode_time_format(timefmt);
     else
         csv_if[_n_inf].tf = NULL;
 
-    load_csv_line(_n_inf);
+    if ( !load_csv_line(_n_inf) ) {   /* P6a: this result was ignored and curLine left uninitialised */
+        fprintf(stderr, "FATAL: %s: no data row after the header\n", fname);
+        exit(1);
+    }
     return _n_inf++;
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
@@ -372,6 +424,8 @@ int close_csv_input(int csvf)
     csv_if[csvf].header = NULL;
     if ( csv_if[csvf].curLine != NULL ) free(csv_if[csvf].curLine);
     csv_if[csvf].curLine = NULL;
+    free(csv_if[csvf].curStat); csv_if[csvf].curStat = NULL;   /* P6a */
+    free(csv_if[csvf].fname);   csv_if[csvf].fname = NULL;
     if ( csv_if[csvf].tf != NULL) {
         free(csv_if[csvf].tf->fmt);
         free(csv_if[csvf].tf);
@@ -448,10 +502,10 @@ int find_csv_var(int csv, const char *name)
  ******************************************************************************/
 int load_csv_line(int csv)
 {
-    char **b = NULL;
-    int    count, i, ret = TRUE;
+    char **b = NULL, *line, *s;
+    int    count, i, n;
     double num;
-    int    jul, secs;
+    int    jul = 0, secs = 0;
 
     if ( csv < 0 || csv > _n_inf ) {
         fprintf(stderr, "Request load for invalid csv file number\n");
@@ -462,30 +516,70 @@ int load_csv_line(int csv)
 #endif
     }
 
-    b = break_line(read_line(csv_if[csv].f), &count);
-
-    if ( b == NULL || count != csv_if[csv].n_cols )
-        ret = FALSE;
-    else {
-        if (csv_if[csv].tf != NULL)
-            read_time_formatted(b[0], csv_if[csv].tf, &jul, &secs);
-        else
-            read_time_string(b[0], &jul, &secs);
-        num = secs; num /= 86400.0; num += jul;
-        csv_if[csv].curLine[0] = num;
-        free(b[0]);
-
-        for (i = 1; i < count; i++) {
-            if (strlen(b[i]) > 0)
-                sscanf(b[i], "%lf", &csv_if[csv].curLine[i]);
-            else
-                csv_if[csv].curLine[i] = NaN;
-            free(b[i]);
+    line = read_line(csv_if[csv].f);
+    if ( line == NULL ) return FALSE;                    /* end of file */
+    csv_if[csv].row++;
+    for (s = line; *s == ' ' || *s == '\t'; s++) ;
+    if ( *s == 0 ) {
+        /* D6b 2026-09-15: a blank line ends the data only when nothing but blank lines follows it. It used to
+         * end the file's data wherever it stood, silently dropping every later row. */
+        int blank = csv_if[csv].row;
+        while ( (line = read_line(csv_if[csv].f)) != NULL ) {
+            csv_if[csv].row++;
+            for (s = line; *s == ' ' || *s == '\t'; s++) ;
+            if ( *s != 0 ) {
+                fprintf(stderr, "FATAL: %s row %d is blank but row %d holds data - a blank line inside the "
+                                "data is not allowed (it used to end the file's data silently)\n",
+                                csv_if[csv].fname ? csv_if[csv].fname : "(csv)", blank, csv_if[csv].row);
+                exit(1);
+            }
         }
+        return FALSE;                                    /* only blank lines follow: the end, as before */
     }
-    if ( b != NULL ) free(b);
 
-    return ret;
+    /* P6a 2026-09-14: a row with the wrong number of fields used to be dropped silently, keeping the previous
+     * row's values (and, on the first row, uninitialised ones). */
+    b = break_line(line, &count, csv_if[csv].fname, csv_if[csv].row);
+    if ( b != NULL && count == csv_if[csv].n_cols + 1 && b[count-1][0] == 0 ) {   /* P6d: "a,b," rows, as before */
+        free(b[--count]);
+        b[count] = NULL;
+    }
+    if ( b == NULL || count != csv_if[csv].n_cols ) {
+        fprintf(stderr, "FATAL: %s row %d: %d field(s), but the header has %d\n",
+                        csv_if[csv].fname ? csv_if[csv].fname : "(csv)", csv_if[csv].row, count, csv_if[csv].n_cols);
+        exit(1);
+    }
+
+    if (csv_if[csv].tf != NULL)
+        read_time_formatted(b[0], csv_if[csv].tf, &jul, &secs);
+    else
+        read_time_string(b[0], &jul, &secs);
+    num = secs; num /= 86400.0; num += jul;
+    if ( strlen(b[0]) == 0 || !(num > 0.0) ) {          /* P6a: a blank or unreadable time became day 0 */
+        fprintf(stderr, "FATAL: %s row %d: time '%s' is not a date\n",
+                        csv_if[csv].fname ? csv_if[csv].fname : "(csv)", csv_if[csv].row, b[0]);
+        exit(1);
+    }
+    csv_if[csv].curLine[0] = num;
+    csv_if[csv].curStat[0] = CSV_OK;
+    free(b[0]);
+
+    for (i = 1; i < count; i++) {
+        if ( strlen(b[i]) == 0 ) {
+            csv_if[csv].curLine[i] = NaN;                /* placeholder: callers check the status */
+            csv_if[csv].curStat[i] = CSV_BLANK;
+        } else if ( sscanf(b[i], "%lf%n", &num, &n) == 1 && b[i][n] == 0 && isfinite(num) ) {   /* P6e: nan, inf and overflow are not numbers */
+            csv_if[csv].curLine[i] = num;                /* the same conversion as before */
+            csv_if[csv].curStat[i] = CSV_OK;
+        } else {
+            csv_if[csv].curLine[i] = NaN;                /* P6a: was the previous row's value or a numeric prefix */
+            csv_if[csv].curStat[i] = CSV_BAD;
+        }
+        free(b[i]);
+    }
+    free(b);
+
+    return TRUE;
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
@@ -522,6 +616,24 @@ AED_REAL get_csv_val_r(int csv, int idx)
 {
     if ( check_it(csv,idx) ) return csv_if[csv].curLine[idx];
     return 0.;
+}
+
+/* P6a: status of one cell of the current row (CSV_OK, CSV_BLANK or CSV_BAD), or CSV_MISSING for a column the
+ * file does not have (an index below 0, as find_csv_var returns for an unknown name). */
+int get_csv_status(int csv, int idx)
+{
+    if ( check_it(csv,idx) ) return csv_if[csv].curStat[idx];
+    return CSV_MISSING;
+}
+
+int get_csv_row(int csv)
+{
+    return (csv >= 0 && csv < _n_inf) ? csv_if[csv].row : -1;
+}
+
+const char *get_csv_fname(int csv)
+{
+    return (csv >= 0 && csv < _n_inf && csv_if[csv].fname != NULL) ? csv_if[csv].fname : "(csv)";
 }
 /*++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*/
 
@@ -634,8 +746,24 @@ void csv_header_start(int f)
     strcpy(csv_of[f].time, "INVALID");
 }
 /*----------------------------------------------------------------------------*/
+/* 2026-07 fix: `header` grows by realloc (unbounded) but `buff` is a FIXED
+ * AED_REAL[MAX_OUT_VALUES+4] and was never checked. Callers whose column count comes
+ * from a namelist - notably open_balance(), which emits THREE columns per
+ * balance_varnum entry - could walk n_cols past the end of buff and scribble onto the
+ * following AED_CSV_OUT entry of the static csv_of[] array, whose first field is a
+ * FILE*. Fail loudly here rather than corrupt another output file. Guarding at the
+ * buffer protects every caller, not just the one that was found overflowing it. */
+static int csv_col_ok(int f, const char *v)
+{
+    if ( csv_of[f].n_cols < (MAX_OUT_VALUES+4) ) return 1;
+    fprintf(stderr, "csv_header_var: too many columns (max %d) adding '%s' - "
+                    "reduce the number of output variables\n", MAX_OUT_VALUES+4, v);
+    exit(1);
+}
+/*----------------------------------------------------------------------------*/
 void csv_header_var(int f, const char *v)
 {
+    if ( !csv_col_ok(f, v) ) return;
     fprintf(csv_of[f].f, ",%s", v);
     csv_of[f].buff[csv_of[f].n_cols] = missing;
     _add_header(&csv_of[f].header, &csv_of[f].n_cols, v);
@@ -643,6 +771,7 @@ void csv_header_var(int f, const char *v)
 /*----------------------------------------------------------------------------*/
 void csv_header_var2(int f, const char *v, const char *units)
 {
+    if ( !csv_col_ok(f, v) ) return;
     fprintf(csv_of[f].f, ",%s [%s]", v, units);
     csv_of[f].buff[csv_of[f].n_cols] = missing;
     _add_header(&csv_of[f].header, &csv_of[f].n_cols, v);
