@@ -38,8 +38,6 @@
 #include "aed_csv.h"
 #include "aed_time.h"
 
-#define MAX_OUT_VALUES   40
-
 #define MAX_OUT_FILES 20000
 #define MAX_IN_FILES  20000
 #define MAX_MEM_CSV   20000
@@ -51,7 +49,8 @@ typedef struct _AED_CSV_OUT {
     char     time[20];
     int      n_cols;
     char   **header;
-    AED_REAL buff[MAX_OUT_VALUES+4];
+    AED_REAL *buff;       /* one slot per column, grown as headers are added */
+    int      buff_cap;
 } AED_CSV_OUT;
 
 static int _n_outf = 0;
@@ -626,26 +625,43 @@ static void _add_header(char ***hdrs, int *n, const char *name)
     *hdrs = l_hdrs;
 }
 /*----------------------------------------------------------------------------*/
+static void _add_col(int f, const char *name)
+{
+    AED_CSV_OUT *o = &csv_of[f];
+
+    if ( o->n_cols >= o->buff_cap ) {
+        int cap = (o->buff_cap > 0) ? o->buff_cap * 2 : 64;
+        AED_REAL *nb = realloc(o->buff, sizeof(AED_REAL)*cap);
+        if ( nb == NULL ) {
+            fprintf(stderr, "Out of memory error
+");
+            exit(1);
+        }
+        o->buff = nb;
+        o->buff_cap = cap;
+    }
+    o->buff[o->n_cols] = missing;
+    _add_header(&o->header, &o->n_cols, name);
+}
+/*----------------------------------------------------------------------------*/
 void csv_header_start(int f)
 {
     fputs("time", csv_of[f].f);
     csv_of[f].n_cols = 0;
-    _add_header(&csv_of[f].header, &csv_of[f].n_cols, "time");
+    _add_col(f, "time");
     strcpy(csv_of[f].time, "INVALID");
 }
 /*----------------------------------------------------------------------------*/
 void csv_header_var(int f, const char *v)
 {
     fprintf(csv_of[f].f, ",%s", v);
-    csv_of[f].buff[csv_of[f].n_cols] = missing;
-    _add_header(&csv_of[f].header, &csv_of[f].n_cols, v);
+    _add_col(f, v);
 }
 /*----------------------------------------------------------------------------*/
 void csv_header_var2(int f, const char *v, const char *units)
 {
     fprintf(csv_of[f].f, ",%s [%s]", v, units);
-    csv_of[f].buff[csv_of[f].n_cols] = missing;
-    _add_header(&csv_of[f].header, &csv_of[f].n_cols, v);
+    _add_col(f, v);
 }
 /*----------------------------------------------------------------------------*/
 void csv_header_end(int f)
